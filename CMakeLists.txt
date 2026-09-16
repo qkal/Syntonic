@@ -59,11 +59,24 @@ target_link_libraries(syntonic
 
 if(PROJECT_IS_TOP_LEVEL)
   enable_testing()
+
+  # The runner and the AppKit bootstrap the suites are written against (U3).
+  # They are not tests/test_*.c, so the glob below leaves them alone; this
+  # target is what carries them, and `main` along with them.
+  add_library(syntonic_test_support STATIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/runner.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/support.m")
+  target_include_directories(syntonic_test_support PUBLIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests")
+  target_link_libraries(syntonic_test_support
+    PRIVATE syntonic_flags
+    PUBLIC syntonic)
+
   file(GLOB SYNTONIC_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_*.c")
   foreach(test_source IN LISTS SYNTONIC_TEST_SOURCES)
     cmake_path(GET test_source STEM test_name)
     add_executable(${test_name} ${test_source})
-    target_link_libraries(${test_name} PRIVATE syntonic syntonic_flags)
+    target_link_libraries(${test_name} PRIVATE syntonic_test_support syntonic_flags)
     add_test(NAME ${test_name} COMMAND ${test_name})
     # The leaks run is not instrumented, so it needs a .dSYM beside the binary
     # to turn a backtrace into file and line (KTD12).
