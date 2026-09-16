@@ -7,6 +7,10 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 
 build_dir := "build"
 san_dir := "build-san"
+twin_name := "Syntonic Twin"
+swift_twin_dir := "build/twin-swift"
+macos_floor := "26.0"
+swift_twin_sources := "twins/swift/main.swift twins/swift/AppDelegate.swift twins/swift/MainWindowController.swift twins/swift/SidebarViewController.swift twins/swift/ListDetailViewController.swift twins/swift/SettingsViewController.swift twins/swift/SeedData.swift"
 
 # List the recipes.
 default:
@@ -49,9 +53,30 @@ check-c11:
 bundle exe name id icons="twins/shared/icon" identity="":
     ./scripts/bundle.sh "{{exe}}" "{{name}}" "{{id}}" "{{icons}}" "{{identity}}"
 
+# CMake cannot build Swift with the Makefile generator, so the Swift twin
+# compiles by calling swiftc directly (KTD1).
+# Compile and bundle the Swift reference twin.
+twin-swift-build:
+    mkdir -p {{swift_twin_dir}}
+    xcrun --sdk macosx swiftc -O -swift-version 6 -target arm64-apple-macos{{macos_floor}} -o {{swift_twin_dir}}/twin-swift {{swift_twin_sources}}
+    ./scripts/bundle.sh {{swift_twin_dir}}/twin-swift "{{twin_name}}" dev.kaino.syntonic.twin.swift twins/shared/icon
+    codesign --verify --strict "{{swift_twin_dir}}/{{twin_name}}.app"
+
 # Build, sign and launch the Swift twin.
-twin-swift:
-    @echo "just twin-swift: not built yet - unit U2 adds the Swift twin under twins/swift." >&2; exit 1
+twin-swift: twin-swift-build
+    open "{{swift_twin_dir}}/{{twin_name}}.app"
+
+# Runs the bare executable, so the quality floor covers both twins, not only
+# the C one. Quit it with Command-Q.
+# Build and run the Swift twin under AddressSanitizer and UndefinedBehaviorSanitizer.
+twin-swift-san:
+    mkdir -p {{swift_twin_dir}}
+    xcrun --sdk macosx swiftc -g -swift-version 6 -sanitize=address,undefined -target arm64-apple-macos{{macos_floor}} -o {{swift_twin_dir}}/twin-swift-san {{swift_twin_sources}}
+    {{swift_twin_dir}}/twin-swift-san
+
+# Capture the Swift twin in every checklist state, in one appearance.
+capture-swift appearance="light": twin-swift-build
+    ./scripts/capture-states.sh swift {{appearance}}
 
 # Build, sign and launch the C twin.
 twin-c:
