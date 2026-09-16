@@ -58,6 +58,11 @@ target_link_libraries(syntonic
   PUBLIC "-framework AppKit" "-framework Foundation")
 
 if(PROJECT_IS_TOP_LEVEL)
+  # The README's snippet is this file, so it has to keep compiling. A consumer
+  # adding Syntonic with add_subdirectory does not build it.
+  add_executable(hello_window "${CMAKE_CURRENT_SOURCE_DIR}/examples/hello_window.c")
+  target_link_libraries(hello_window PRIVATE syntonic syntonic_flags)
+
   enable_testing()
 
   # The runner and the AppKit bootstrap the suites are written against (U3).
