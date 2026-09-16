@@ -214,6 +214,23 @@ bool syn_test_delegate_responds(const void *handle, const char *selector) {
   }
 }
 
+bool syn_test_delegate_answers_about_row(const void *handle,
+                                         const char *selector, long row) {
+  @autoreleasepool {
+    id delegate = syn_test_delegate(handle);
+    SEL question = sel_registerName(selector);
+    if (delegate == nil || ![delegate respondsToSelector:question])
+      return false;
+    id view = (__bridge id)(void *)handle;
+    /* The outline's own item for that row, which is what AppKit hands the
+     * delegate when it asks. */
+    id item = ((id (*)(id, SEL, NSInteger))objc_msgSend)(
+        view, @selector(itemAtRow:), (NSInteger)row);
+    return ((BOOL (*)(id, SEL, id, id))objc_msgSend)(delegate, question, view,
+                                                     item);
+  }
+}
+
 const char *syn_test_action_name(const void *handle) {
   @autoreleasepool {
     id object = (__bridge id)(void *)handle;

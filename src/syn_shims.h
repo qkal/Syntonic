@@ -212,12 +212,22 @@ long syn_shim_live_count(void);
 
 void syn_shim_report_count(const syn_shim_table *table, const char *member,
                            long count);
+void syn_shim_report_null(const syn_shim_table *table, const char *member,
+                          const void *value);
 void syn_shim_report_handle(const syn_shim_table *table, const char *member,
                             const void *handle, Class expected, bool required);
 
 /* A count a callback returned is not negative. */
 #define SYN_SHIM_CHECK_COUNT(table, member, count)                            \
   syn_shim_report_count(&(table), #member, (count))
+
+/* A pointer a callback returned is not null where the member never returns
+ * null: a cell's borrowed string, an outline's child item. Unlike
+ * SYN_SHIM_CHECK_HANDLE this asks nothing of the pointer beyond that, because
+ * what comes back is a C string or one of the caller's own item pointers, not
+ * an object handle (KTD6, KTD8). */
+#define SYN_SHIM_CHECK_NONNULL(table, member, value)                          \
+  syn_shim_report_null(&(table), #member, (const void *)(value))
 
 /* A handle a callback returned is non-null where the SDK says non-null, and is
  * the expected class or a subclass of it (R12). */
@@ -228,6 +238,7 @@ void syn_shim_report_handle(const syn_shim_table *table, const char *member,
 #else /* NDEBUG */
 
 #define SYN_SHIM_CHECK_COUNT(table, member, count) ((void)0)
+#define SYN_SHIM_CHECK_NONNULL(table, member, value) ((void)0)
 #define SYN_SHIM_CHECK_HANDLE(table, member, handle, cls, required) ((void)0)
 
 #endif /* NDEBUG */

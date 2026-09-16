@@ -114,6 +114,14 @@ void syn_test_fire_action(const void *handle);
 bool syn_test_has_delegate(const void *handle);
 bool syn_test_delegate_responds(const void *handle, const char *selector);
 
+/* Asks the delegate of the outline behind `handle` one of its BOOL questions
+ * about the item displayed at `row`, exactly as AppKit asks it: the outline
+ * and the item, in that order. False when no delegate answers the selector.
+ * AppKit applies some of those answers only to a selection or an expansion the
+ * user drives, so this is how a suite sees what the shim would tell it. */
+bool syn_test_delegate_answers_about_row(const void *handle,
+                                         const char *selector, long row);
+
 /* The action selector the object behind `handle` carries, as the runtime
  * spells it, and "" when it has none. A SEL never crosses Syntonic's own
  * boundary (R11), so this is the only way a C suite can pin the standard menu

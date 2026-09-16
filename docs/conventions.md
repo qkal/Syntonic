@@ -244,6 +244,7 @@ nobody invents a second spelling.
 | `ns_<class>_set_callbacks(handle, callbacks, context)` | the protocol-struct installer |
 | `ns_<type>_as_<ancestor>` | an upcast |
 | struct members with no AppKit counterpart, such as `cell_string` | see [Callbacks](#callbacks) |
+| `ns_outline_view_selected_item`, `ns_outline_view_select_item`, `ns_outline_view_scroll_item_to_visible` | the three two-selector compositions an outline item needs, because AppKit addresses an outline by row (`rowForItem:` and then `selectRowIndexes:…`, `scrollRowToVisible:` or `itemAtRow:`) and a Syntonic item is a pointer. Each names both selectors in its comment |
 
 ---
 
@@ -636,6 +637,7 @@ it, and hands back an owned handle through `syn_shim_take`:
 
 ```c
 SYN_SHIM_CHECK_COUNT(syn_table_view_table, number_of_rows, count);
+SYN_SHIM_CHECK_NONNULL(syn_table_view_table, cell_string, text);
 SYN_SHIM_CHECK_HANDLE(syn_toolbar_table, item_for_item_identifier_…, handle,
                       NSToolbarItem, false);
 return syn_shim_take(handle); /* the callback's +1 goes once AppKit retains */
@@ -680,12 +682,16 @@ AppKit, and reports the protocol, the member and the value on failure
 
 - null where the SDK's nullability says non-null,
 - a negative count,
+- null from a member that never returns null — a cell's borrowed string, an
+  outline's child item; neither is an object handle, so neither is checked as
+  one,
 - a handle whose class is not the expected class or a subclass.
 
-`SYN_SHIM_CHECK_COUNT` and `SYN_SHIM_CHECK_HANDLE` are the two checks, written
-in the shim method between the callback's return and AppKit's — see
-[How a wrapper installs one](#how-a-wrapper-installs-one), piece 4. Both are
-nothing under `NDEBUG`.
+`SYN_SHIM_CHECK_COUNT`, `SYN_SHIM_CHECK_NONNULL` and `SYN_SHIM_CHECK_HANDLE`
+are the three checks, written in the shim method between the callback's return
+and AppKit's — see
+[How a wrapper installs one](#how-a-wrapper-installs-one), piece 4. All three
+are nothing under `NDEBUG`.
 
 ---
 
@@ -699,8 +705,8 @@ required**, because every protocol v0 wraps is `@optional` in the SDK.
 | `ns_application_callbacks` | `NSApplicationDelegate` | none | `did_finish_launching`, `should_terminate_after_last_window_closed`, `will_terminate` | — | U14 ✓ |
 | `ns_window_callbacks` | `NSWindowDelegate` | none | `will_close` | — | U14 ✓ |
 | `ns_text_field_callbacks` | `NSTextFieldDelegate` | none | `did_change`, `did_end_editing` | — | U7 ✓ |
-| `ns_table_view_callbacks` | `NSTableViewDataSource` + `NSTableViewDelegate` (merged) | `number_of_rows`, `cell_string` | `selection_did_change` | — | U8 |
-| `ns_outline_view_callbacks` | `NSOutlineViewDataSource` + `NSOutlineViewDelegate` (merged) | `number_of_children_of_item`, `child_of_item`, `is_item_expandable`, `cell_string` | `should_expand_item`, `selection_did_change` | — | U8 |
+| `ns_table_view_callbacks` | `NSTableViewDataSource` + `NSTableViewDelegate` (merged) | `number_of_rows`, `cell_string` | `selection_did_change` | — | U8 ✓ |
+| `ns_outline_view_callbacks` | `NSOutlineViewDataSource` + `NSOutlineViewDelegate` (merged) | `number_of_children_of_item`, `child_of_item`, `is_item_expandable`, `cell_string` | `should_expand_item`, `should_collapse_item`, `is_group_item`, `should_select_item`, `selection_did_change` | — | U8 ✓ |
 | `ns_toolbar_callbacks` | `NSToolbarDelegate` | `item_for_item_identifier_will_be_inserted_into_toolbar` | — | `toolbarDefaultItemIdentifiers:`, `toolbarAllowedItemIdentifiers:` — the wrapper answers both from C string arrays passed by pointer plus count | U9 |
 | `ns_combo_box_callbacks` | `NSComboBoxDataSource` + `NSComboBoxDelegate` (merged; embeds `ns_text_field_callbacks` first, because `NSComboBoxDelegate` inherits `NSTextFieldDelegate`) | `number_of_items`, `object_value_for_item_at_index` | `index_of_item_with_string_value`, `completed_string`, `selection_did_change`, `selection_is_changing`, `will_pop_up`, `will_dismiss` | — | U13 |
 
@@ -708,7 +714,21 @@ A ✓ in the unit column means the row was checked against the shipped struct.
 
 `cell_string` has no AppKit counterpart: it is the Syntonic-owned member that
 supplies one borrowed UTF-8 string per cell, which the wrapper copies into the
-cell view it built and reuses.
+cell view it built and reuses. It answers
+`tableView:viewForTableColumn:row:` and `outlineView:viewForTableColumn:item:`,
+which is why those two selectors appear in no other row.
+
+**The table's members** carry the column's index and the row's, in that order,
+because a table addresses a cell by both. **The outline's members carry an item
+pointer**, null for the root, and the wrapper boxes each pointer once into a
+cached object so the same item comes back as the same object across a reload —
+Apple's identity rule for `NSOutlineView`. `is_group_item` and
+`should_select_item` are what a sidebar's unselectable headings are made of
+(R15); they are optional, and an outline that sets neither is a flat,
+selectable list. `should_collapse_item` is the other half of
+`should_expand_item`, and false is the sidebar whose headings never close.
+AppKit asks `should_select_item` about a selection the user drives, not about
+one `ns_outline_view_select_item` makes.
 
 **The text field's two members answer `NSControlTextEditingDelegate`
 selectors** — `controlTextDidChange:` and `controlTextDidEndEditing:`.
@@ -1132,7 +1152,7 @@ named section in its own commit; nothing else in the document moves.
 | U14 ✓ | landed: the application and window rows of the per-protocol table, confirmed against the shipped structs; [How a wrapper installs one](#how-a-wrapper-installs-one), which is `src/syn_shims.h` as the six later units use it; `+[NSApplication sharedApplication]` on the [borrowed-return allowlist](#the-mechanical-rule-read-the-sdk-propertys-attribute); `NSWindow`'s `releasedWhenClosed` fixup confirmed. The view controller needed no row: NSViewController has no protocol Syntonic wraps |
 | U6 ✓ | landed: [The index check](#the-index-check) in [Misuse checks](#misuse-checks-and-exceptions), which is `NS_CHECK_INDEX` and where not to use it; the dropped-segment rule in [Constructors](#constructors), for a selector segment whose type cannot cross; [An enum from a header that is not wrapped](#an-enum-from-a-header-that-is-not-wrapped), for `ns_event_modifier_flags`; `-[NSMenu itemAtIndex:]` confirmed on the [borrowed-return allowlist](#the-mechanical-rule-read-the-sdk-propertys-attribute). No per-protocol row and no post-init fixup: v0 wraps no menu protocol, and neither `NSMenu` nor `NSMenuItem` needs a line after construction |
 | U7 ✓ | landed: the accessibility setters and the role-as-a-string decision in [Accessibility](#accessibility); the text-field row of the per-protocol table, confirmed against the shipped struct; the inherited-API-through-the-upcast rule in [Upcasts](#upcasts), which is why there is no `ns_button_set_action`. No post-init fixup: none of `NSView`, `NSControl`, `NSButton`, `NSTextField` or `NSPopUpButton` needs a line after construction |
-| U8 | the table and outline rows of the per-protocol table, confirmed against the shipped structs |
+| U8 ✓ | landed: the table and outline rows of the per-protocol table, confirmed against the shipped structs, with what a member's extra arguments are and why the outline's two group-row members exist; `SYN_SHIM_CHECK_NONNULL` in [Debug return validation](#debug-return-validation), the third check, for a member whose return is neither a count nor an object handle; the outline's three two-selector compositions in [Syntonic-owned names](#syntonic-owned-names). `-[NSTableView viewAtColumn:row:makeIfNecessary:]` confirmed on the [borrowed-return allowlist](#the-mechanical-rule-read-the-sdk-propertys-attribute). No post-init fixup. Two things a later unit should know rather than rediscover: **a constructor is the one inherited member a subclass redeclares**, because an upcast needs an object to upcast, so `ns_outline_view_create_with_frame` carries `-[NSTableView initWithFrame:]` in its comment; and `NSTableColumn` got its own mirror header, because a table with no column shows no cell and the alternative was a builder in a mirror header |
 | U9 | the toolbar row, including the dropped identifier methods |
 | U10 | anything the tab view controller needs that is not already here |
 | U13 | the combo box row, confirmed against the shipped wrapper — the row is pre-filled from the SDK header so the author has a source |

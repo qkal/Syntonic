@@ -30,6 +30,12 @@
 #include <syntonic/ns_view.h>
 #include <syntonic/ns_view_controller.h>
 #include <syntonic/ns_window.h>
+/* U8's four headers, appended as one block rather than interleaved, so the
+ * units landing beside it merge without touching each other's lines. */
+#include <syntonic/ns_outline_view.h>
+#include <syntonic/ns_scroll_view.h>
+#include <syntonic/ns_table_column.h>
+#include <syntonic/ns_table_view.h>
 
 #ifdef __cplusplus
 extern "C" {

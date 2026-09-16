@@ -122,6 +122,16 @@ void syn_shim_report_count(const syn_shim_table *table, const char *member,
   syn_shim_stop();
 }
 
+void syn_shim_report_null(const syn_shim_table *table, const char *member,
+                          const void *value) {
+  if (value != NULL) return;
+  fprintf(stderr,
+          "syntonic: %s's member %s returned null; this member never returns "
+          "null (KTD8).\n",
+          table->protocol, member);
+  syn_shim_stop();
+}
+
 void syn_shim_report_handle(const syn_shim_table *table, const char *member,
                             const void *handle, Class expected,
                             bool required) {
