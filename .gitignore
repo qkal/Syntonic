@@ -1,0 +1,8 @@
+docs/plans/
+docs/brainstorms/
+docs/research/
+build/
+build-san/
+*.dSYM/
+.remember/
+.DS_Store
