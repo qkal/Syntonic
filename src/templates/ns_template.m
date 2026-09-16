@@ -18,12 +18,59 @@
 #import <AppKit/AppKit.h>
 
 #include "ns_internal.h"
+#include "syn_shims.h"
 #include "ns_template.h" /* a real wrapper: #include "syntonic/ns_button.h" */
 
 /* The template has to compile, so its placeholder class is spelled as a real
  * one. A real wrapper deletes these two lines and writes NSButton throughout. */
 @compatibility_alias NSTemplate NSButton;
 @compatibility_alias NSTemplateSuper NSView;
+
+/* The member table: one row per struct member, naming the selector it answers
+ * and whether docs/conventions.md's per-protocol table lists it as required.
+ * That table is the source, not the SDK, because every protocol v0 wraps is
+ * entirely @optional (R9, KTD8). */
+SYN_SHIM_TABLE(syn_template_table, ns_template_callbacks,
+               "NSTemplateDelegate + NSTemplateDataSource",
+               SYN_SHIM_OPTIONAL(ns_template_callbacks, did_change,
+                                 "templateDidChange:"),
+               SYN_SHIM_REQUIRED(ns_template_callbacks, number_of_items,
+                                 "numberOfItemsInTemplate:"));
+
+/* One shim subclass per protocol, or per merged pair (KTD6). A real wrapper
+ * adopts the protocols here - @interface SynButtonShim : SynShim
+ * <NSButtonDelegate> - and implements one method per member. The placeholder
+ * protocols do not exist, so this one declares its methods instead. */
+@interface SynTemplateShim : SynShim
+- (void)templateDidChange:(NSNotification *)notification;
+- (NSInteger)numberOfItemsInTemplate:(NSTemplate *)sender;
+@end
+
+@implementation SynTemplateShim
+
+/* A lone notification parameter becomes the sender handle (R5). */
+- (void)templateDidChange:(NSNotification *)notification {
+  SYN_SHIM_ENTER(NSTemplate, notification.object);
+  void (*callback)(void *, ns_template *) =
+      SYN_SHIM_FN(ns_template_callbacks, did_change);
+  if (callback != NULL) callback(syn_context, NS_OUT(ns_template, syn_sender));
+  SYN_SHIM_LEAVE();
+}
+
+/* A member that returns a value validates it before AppKit sees it (KTD8). */
+- (NSInteger)numberOfItemsInTemplate:(NSTemplate *)sender {
+  SYN_SHIM_ENTER(NSTemplate, sender);
+  long count = 0;
+  long (*callback)(void *, ns_template *) =
+      SYN_SHIM_FN(ns_template_callbacks, number_of_items);
+  if (callback != NULL)
+    count = callback(syn_context, NS_OUT(ns_template, syn_sender));
+  SYN_SHIM_CHECK_COUNT(syn_template_table, number_of_items, count);
+  return (NSInteger)count;
+  SYN_SHIM_LEAVE();
+}
+
+@end
 
 /* Owned (+1): the caller ends it with ns_release (R7, KTD7). */
 ns_template *ns_template_create(CGRect frame) {
@@ -93,26 +140,39 @@ ns_template_super *ns_template_as_template_super(ns_template *receiver) {
   NS_LEAVE();
 }
 
+/* The trampoline is installed, replaced and uninstalled by one call; the block
+ * is where this class's target and action slots live (R9). */
 void ns_template_set_action(ns_template *receiver, ns_action action,
                             void *context) {
   NS_ENTER();
-  /* U14 replaces the next two lines with the trampoline installer from
-   * src/syn_shims.h, which does not exist yet:
-   *   syn_install_action(NS_IN(NSTemplate, receiver), action, context); */
-  (void)NS_IN(NSTemplate, receiver);
-  (void)action, (void)context;
+  NSTemplate *control = NS_IN(NSTemplate, receiver);
+  syn_install_action(control, action, context, ^(id target, SEL selector) {
+    control.target = target;
+    control.action = selector;
+  });
   NS_LEAVE();
 }
 
+/* Install, replace and uninstall in one call: a non-null struct installs or
+ * replaces, a null struct uninstalls, and a missing required member is
+ * reported before AppKit ever sees the shim (R9, KTD8). */
 void ns_template_set_callbacks(ns_template *receiver,
                                const ns_template_callbacks *callbacks,
                                void *context) {
   NS_ENTER();
-  /* U14 replaces the next two lines with the shim installer from
-   * src/syn_shims.h, which does not exist yet:
-   *   syn_install_callbacks(NS_IN(NSTemplate, receiver), &syn_template_members,
-   *                         callbacks, sizeof *callbacks, context); */
-  (void)NS_IN(NSTemplate, receiver);
-  (void)callbacks, (void)context;
+  NSTemplate *target = NS_IN(NSTemplate, receiver);
+  SYN_SHIM_INSTALL(target, SynTemplateShim, syn_template_table, callbacks,
+                   context, ^(id shim) {
+                     /* A real wrapper assigns this class's weak delegate slot
+                      * here - target.delegate = shim; - and a merged struct
+                      * (KTD6) assigns both of its slots in this one block:
+                      *
+                      *   target.delegate = shim;
+                      *   target.dataSource = shim;
+                      *
+                      * The placeholder class stands in for one that has
+                      * neither, so this block only shows where they go. */
+                     (void)shim;
+                   });
   NS_LEAVE();
 }

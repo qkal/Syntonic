@@ -1,4 +1,5 @@
 #import <AppKit/AppKit.h>
+#import <objc/message.h>
 #import <objc/runtime.h>
 
 #include <crt_externs.h>
@@ -16,6 +17,7 @@
 #include <unistd.h>
 
 #include "../src/ns_internal.h"
+#include "../src/syn_shims.h"
 #include "support.h"
 
 /* A hung abort case fails the suite instead of hanging CTest. */
@@ -49,7 +51,10 @@ bool syn_test_activation_policy_is_prohibited(void) {
 
 const char *syn_test_class_name(const void *handle) {
   if (handle == NULL) return NULL;
-  return object_getClassName((__bridge id)(void *)handle);
+  /* -class, not object_getClassName: AppKit observes its own windows, and the
+   * isa of a KVO'd object is a generated NSKVONotifying_ subclass that -class
+   * deliberately hides. The suites want the class the API is about. */
+  return class_getName([(__bridge id)(void *)handle class]);
 }
 
 double syn_test_now_ms(void) {
@@ -164,6 +169,107 @@ void syn_test_wrapper_raises(void) {
   NS_ENTER();
   syn_test_raise_in_wrapper();
   NS_LEAVE();
+}
+
+/* ---- the callback machinery (U14) ---- */
+
+void syn_test_install_action(const void *handle, ns_action action,
+                             void *context) {
+  @autoreleasepool {
+    NSControl *control = (__bridge NSControl *)(void *)handle;
+    syn_install_action(control, action, context, ^(id target, SEL selector) {
+      control.target = target;
+      control.action = selector;
+    });
+  }
+}
+
+void syn_test_fire_action(const void *handle) {
+  @autoreleasepool {
+    NSControl *control = (__bridge NSControl *)(void *)handle;
+    /* sendAction:to: rather than performClick:, so an off-screen control fires
+     * synchronously and an uninstalled action is simply a no-op. */
+    [control sendAction:control.action to:control.target];
+  }
+}
+
+static id syn_test_delegate(const void *handle) {
+  id object = (__bridge id)(void *)handle;
+  /* NSApplication and NSWindow both answer -delegate; going through the
+   * runtime says so without pretending the handle is one of the two. */
+  return ((id (*)(id, SEL))objc_msgSend)(object, @selector(delegate));
+}
+
+bool syn_test_has_delegate(const void *handle) {
+  @autoreleasepool {
+    return syn_test_delegate(handle) != nil;
+  }
+}
+
+bool syn_test_delegate_responds(const void *handle, const char *selector) {
+  @autoreleasepool {
+    id delegate = syn_test_delegate(handle);
+    return delegate != nil &&
+           [delegate respondsToSelector:sel_registerName(selector)];
+  }
+}
+
+long syn_test_shim_live_count(void) {
+#ifndef NDEBUG
+  return syn_shim_live_count();
+#else
+  return -1; /* no counter in a release build; SYN_ASSERT_SHIMS steps aside */
+#endif
+}
+
+/* A stand-in protocol. No protocol U14 wraps has a required member or a member
+ * that returns anything, and six later units have both, so the suites drive
+ * those halves of the machinery through this table. */
+typedef struct syn_test_shim_callbacks {
+  long (*number_of_rows)(void);
+  const void *(*cell_view)(void);
+} syn_test_shim_callbacks;
+
+SYN_SHIM_TABLE(syn_test_shim_table, syn_test_shim_callbacks, "NSTestDelegate",
+               SYN_SHIM_REQUIRED(syn_test_shim_callbacks, number_of_rows,
+                                 "numberOfRows"),
+               SYN_SHIM_OPTIONAL(syn_test_shim_callbacks, cell_view,
+                                 "cellView"));
+
+static long syn_test_no_rows(void) {
+  return 0;
+}
+
+void syn_test_install_required_member_struct(const void *handle,
+                                             bool set_required) {
+  @autoreleasepool {
+    syn_test_shim_callbacks callbacks = {0};
+    if (set_required) callbacks.number_of_rows = syn_test_no_rows;
+    id object = (__bridge id)(void *)handle;
+    /* The assign block is a no-op: nothing dispatches to this stand-in, and
+     * what is under test happens before the block runs. */
+    SYN_SHIM_INSTALL(object, SynShim, syn_test_shim_table, &callbacks, NULL,
+                     ^(id shim) { (void)shim; });
+  }
+}
+
+void syn_test_shim_check_count(long count) {
+  SYN_SHIM_CHECK_COUNT(syn_test_shim_table, number_of_rows, count);
+}
+
+void syn_test_shim_check_returned_handle(const void *handle) {
+  SYN_SHIM_CHECK_HANDLE(syn_test_shim_table, cell_view, handle, NSView, true);
+}
+
+void syn_test_post_notification(const char *name, const void *object) {
+  @autoreleasepool {
+    /* AppKit registers a delegate for its own notifications when the slot is
+     * assigned, and only for the ones respondsToSelector: claims, so posting
+     * one is how a suite sees that cache from the outside (KTD8). */
+    [NSNotificationCenter.defaultCenter
+        postNotificationName:[NSString stringWithUTF8String:name]
+                      object:(__bridge id)(void *)object];
+  }
 }
 
 static char *syn_copy_string(const char *text) {

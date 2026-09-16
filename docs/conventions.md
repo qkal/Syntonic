@@ -14,11 +14,12 @@ rule at the point you need it. Reviewing a wrapper? Read the section that owns
 the rule. Looking for one answer? The [rule index](#rule-index) maps each
 requirement to its section.
 
-**The three files this document sits next to.**
+**The four files this document sits next to.**
 
 | File | What it gives you |
 |---|---|
 | `src/ns_internal.h` | the macros every wrapper body is made of, with the four canonical bodies in its header comment |
+| `src/syn_shims.h` | the callback machinery: the member table, the shim base class, the one install call and the target/action trampoline |
 | `src/templates/ns_template.h`, `src/templates/ns_template.m` | a compiling skeleton to copy, one function per shape |
 | `scripts/lint-headers.sh` | the mechanical half of the header rules, run by `just lint-headers` |
 
@@ -319,12 +320,21 @@ You do not have to think about this. Look at how the SDK declares it.
 | any other method returning an object | **owned** | `ns_…_copy_…` | `NS_OUT_OWNED` |
 | a method on the allowlist below | borrowed | `ns_menu_item_at_index` | `NS_OUT` |
 
-**The child-accessor allowlist.** These return a child the receiver keeps, so
-they are borrowed despite being plain methods. The list is closed; adding to it
-is a change to this document, reviewed on its own.
+**The borrowed-return allowlist.** These are borrowed despite being plain
+methods, because something else already holds the object for as long as the
+caller could use it. The list is closed; adding to it is a change to this
+document, reviewed on its own.
 
-- `-[NSMenu itemAtIndex:]`
-- `-[NSTableView viewAtColumn:row:makeIfNecessary:]`
+| Method | Who holds it |
+|---|---|
+| `-[NSMenu itemAtIndex:]` | the menu, which keeps the item |
+| `-[NSTableView viewAtColumn:row:makeIfNecessary:]` | the table, which keeps the view |
+| `+[NSApplication sharedApplication]` | AppKit, for the life of the process |
+
+`sharedApplication` is the one class method on the list. It is not a
+constructor: there is one application per process, it is never deallocated, and
+an owned `ns_application_copy_shared` would be a reference with nothing to
+balance. So it is `ns_application_shared`, borrowed, `NS_OUT`.
 
 **The surprise.** These are all `copy` properties in the SDK, which catches
 people who expect a getter to be cheap and borrowed:
@@ -382,7 +392,7 @@ adds a row.
 
 | Class | Fixup | Why |
 |---|---|---|
-| `NSWindow` | `window.releasedWhenClosed = NO` in `ns_window_create…` | NSWindow's default is to release itself when closed, which would leave the caller's handle dangling. With it off, closing only orders the window out and `ns_release` tears it down. |
+| `NSWindow` | `window.releasedWhenClosed = NO` in `ns_window_create_with_content_rect_style_mask_backing_defer` | NSWindow's default is to release itself when closed, which would leave the caller's handle dangling. With it off, closing only orders the window out and `ns_release` tears it down. `tests/test_window.c` pins both halves. |
 
 ### Mechanics
 
@@ -517,6 +527,94 @@ Syntonic merges each pair into one struct — `ns_table_view_callbacks`,
 `ns_outline_view_callbacks` — so one shim conforms to both and one install sets
 both AppKit slots.
 
+### How a wrapper installs one
+
+`src/syn_shims.h` is the machinery, and every wrapper goes through it. A
+protocol is four pieces in the `.m`, in this order, and nothing else.
+
+**1. The member table.** One row per struct member: the selector it answers,
+where it sits in the struct, and whether
+[the table below](#required-members-per-protocol) lists it as required.
+
+```c
+SYN_SHIM_TABLE(syn_window_table, ns_window_callbacks, "NSWindowDelegate",
+               SYN_SHIM_OPTIONAL(ns_window_callbacks, will_close,
+                                 "windowWillClose:"));
+```
+
+`SYN_SHIM_REQUIRED` is the other row macro, and a member of an embedded parent
+struct is named through it:
+`SYN_SHIM_OPTIONAL(ns_combo_box_callbacks, text_field.did_change,
+"controlTextDidChange:")`. The protocol string is what a report names, so a
+merged struct spells both: `"NSTableViewDataSource + NSTableViewDelegate"`.
+
+**2. The shim subclass**, which adopts the protocol — both protocols, for a
+merged struct — and implements one method per member.
+
+```objc
+@interface SynWindowShim : SynShim <NSWindowDelegate>
+@end
+
+@implementation SynWindowShim
+- (void)windowWillClose:(NSNotification *)notification {
+  SYN_SHIM_ENTER(NSWindow, notification.object);
+  void (*callback)(void *, ns_window *) =
+      SYN_SHIM_FN(ns_window_callbacks, will_close);
+  if (callback != NULL) callback(syn_context, NS_OUT(ns_window, syn_sender));
+  SYN_SHIM_LEAVE();
+}
+@end
+```
+
+`SYN_SHIM_ENTER` takes the sender's AppKit class and the expression that yields
+it — the method's own sender argument, or a lone notification's `object` — and
+declares `syn_sender` and `syn_context` for the body. It also opens the call's
+autorelease pool and holds the shim and the sender until the method returns,
+which is what makes a callback that re-installs its own struct, releases the
+sender, or closes the window it was handed safe rather than a use after free.
+Test the function pointer against null even for a member `respondsToSelector:`
+reports as absent: AppKit caches that answer and a stale cache would otherwise
+call through a null pointer.
+
+**3. The installer**, which is one call:
+
+```c
+void ns_window_set_callbacks(ns_window *window,
+                             const ns_window_callbacks *callbacks,
+                             void *context) {
+  NS_ENTER();
+  NSWindow *target = NS_IN(NSWindow, window);
+  SYN_SHIM_INSTALL(target, SynWindowShim, syn_window_table, callbacks, context,
+                   ^(id shim) { target.delegate = shim; });
+  NS_LEAVE();
+}
+```
+
+The block is the only part that differs per class: it assigns the AppKit slots
+this protocol lives in, and it is called with the new shim or with nil to
+uninstall. A merged struct assigns both slots in that one block:
+
+```c
+^(id shim) { target.delegate = shim; target.dataSource = shim; }
+```
+
+Everything else is the same call for every protocol — the required-member
+report, the struct copy, assigning the slot before swapping the association,
+releasing the previous shim, and uninstalling on a null struct.
+
+**4. A member that returns something** validates the value before AppKit sees
+it, and hands back an owned handle through `syn_shim_take`:
+
+```c
+SYN_SHIM_CHECK_COUNT(syn_table_view_table, number_of_rows, count);
+SYN_SHIM_CHECK_HANDLE(syn_toolbar_table, item_for_item_identifier_…, handle,
+                      NSToolbarItem, false);
+return syn_shim_take(handle); /* the callback's +1 goes once AppKit retains */
+```
+
+Both checks compile out under `NDEBUG`. `syn_shim_take` does not: it is the
+ownership rule in rule 8 above, not a debug check.
+
 ### Lifetimes
 
 | Thing | Lives from | Until |
@@ -555,6 +653,11 @@ AppKit, and reports the protocol, the member and the value on failure
 - a negative count,
 - a handle whose class is not the expected class or a subclass.
 
+`SYN_SHIM_CHECK_COUNT` and `SYN_SHIM_CHECK_HANDLE` are the two checks, written
+in the shim method between the callback's return and AppKit's — see
+[How a wrapper installs one](#how-a-wrapper-installs-one), piece 4. Both are
+nothing under `NDEBUG`.
+
 ---
 
 ## Required members per protocol
@@ -564,17 +667,26 @@ required**, because every protocol v0 wraps is `@optional` in the SDK.
 
 | C struct | AppKit protocol(s) | Required | Optional | Served from stored data (dropped) | Unit |
 |---|---|---|---|---|---|
-| `ns_application_callbacks` | `NSApplicationDelegate` | none | `did_finish_launching`, `should_terminate_after_last_window_closed`, `will_terminate` | — | U14 |
-| `ns_window_callbacks` | `NSWindowDelegate` | none | `will_close` | — | U14 |
+| `ns_application_callbacks` | `NSApplicationDelegate` | none | `did_finish_launching`, `should_terminate_after_last_window_closed`, `will_terminate` | — | U14 ✓ |
+| `ns_window_callbacks` | `NSWindowDelegate` | none | `will_close` | — | U14 ✓ |
 | `ns_text_field_callbacks` | `NSTextFieldDelegate` | none | `did_change`, `did_end_editing` | — | U7 |
 | `ns_table_view_callbacks` | `NSTableViewDataSource` + `NSTableViewDelegate` (merged) | `number_of_rows`, `cell_string` | `selection_did_change` | — | U8 |
 | `ns_outline_view_callbacks` | `NSOutlineViewDataSource` + `NSOutlineViewDelegate` (merged) | `number_of_children_of_item`, `child_of_item`, `is_item_expandable`, `cell_string` | `should_expand_item`, `selection_did_change` | — | U8 |
 | `ns_toolbar_callbacks` | `NSToolbarDelegate` | `item_for_item_identifier_will_be_inserted_into_toolbar` | — | `toolbarDefaultItemIdentifiers:`, `toolbarAllowedItemIdentifiers:` — the wrapper answers both from C string arrays passed by pointer plus count | U9 |
 | `ns_combo_box_callbacks` | `NSComboBoxDataSource` + `NSComboBoxDelegate` (merged; embeds `ns_text_field_callbacks` first, because `NSComboBoxDelegate` inherits `NSTextFieldDelegate`) | `number_of_items`, `object_value_for_item_at_index` | `index_of_item_with_string_value`, `completed_string`, `selection_did_change`, `selection_is_changing`, `will_pop_up`, `will_dismiss` | — | U13 |
 
+A ✓ in the unit column means the row was checked against the shipped struct.
+
 `cell_string` has no AppKit counterpart: it is the Syntonic-owned member that
 supplies one borrowed UTF-8 string per cell, which the wrapper copies into the
 cell view it built and reuses.
+
+**`should_terminate_after_last_window_closed` unset means false**, which is F1:
+closing the last window leaves the app running with its menu bar until Quit.
+Nothing in the wrapper enforces that, and nothing needs to: an unset member is
+a method the delegate does not implement, and AppKit's own answer when
+`applicationShouldTerminateAfterLastWindowClosed:` is absent is the same false.
+The two agree, so F1 holds whether the caller sets the member or not.
 
 Why these are required even though the SDK says `@optional`:
 `NSComboBoxDataSource`'s header says in so many words that its first two methods
@@ -848,7 +960,9 @@ request.
 
 If the class has a delegate or a data source: one struct of function pointers,
 members named per [Naming](#naming), the parent protocol's struct embedded first,
-and one `ns_combo_box_set_callbacks` installer. Then **add a row to
+and one `ns_combo_box_set_callbacks` installer written the way
+[How a wrapper installs one](#how-a-wrapper-installs-one) spells out — a member
+table, a `SynComboBoxShim`, and one `SYN_SHIM_INSTALL`. Then **add a row to
 [Required members per protocol](#required-members-per-protocol)** naming every
 required and optional member. Check the SDK for an `assign` delegate slot —
 `NSComboBox.dataSource` is `assign`, so uninstalling before release is what keeps
@@ -928,7 +1042,7 @@ named section in its own commit; nothing else in the document moves.
 
 | Unit | Appends |
 |---|---|
-| U14 | the application, window and view-controller rows of the per-protocol table; the shim installer's real name in [Callbacks](#callbacks) once `src/syn_shims.h` exists; any new post-init fixup |
+| U14 ✓ | landed: the application and window rows of the per-protocol table, confirmed against the shipped structs; [How a wrapper installs one](#how-a-wrapper-installs-one), which is `src/syn_shims.h` as the six later units use it; `+[NSApplication sharedApplication]` on the [borrowed-return allowlist](#the-mechanical-rule-read-the-sdk-propertys-attribute); `NSWindow`'s `releasedWhenClosed` fixup confirmed. The view controller needed no row: NSViewController has no protocol Syntonic wraps |
 | U6 | the menu index-check pattern in [Misuse checks](#misuse-checks-and-exceptions) |
 | U7 | the accessibility setters in [Accessibility](#accessibility); the text-field row of the per-protocol table |
 | U8 | the table and outline rows of the per-protocol table, confirmed against the shipped structs |

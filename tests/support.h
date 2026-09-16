@@ -15,6 +15,8 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
+#include <syntonic/ns_base.h>
+
 #include "runner.h"
 
 /* Creates the shared application with the prohibited activation policy and
@@ -27,7 +29,9 @@ const void *syn_test_shared_application(void);
 /* True when the shared application's activation policy is prohibited. */
 bool syn_test_activation_policy_is_prohibited(void);
 
-/* The Objective-C class name behind a handle. Runtime-owned, never freed. */
+/* The Objective-C class name behind a handle, as -class reports it: an object
+ * AppKit has put under KVO hides its generated subclass there. Runtime-owned,
+ * never freed. */
 const char *syn_test_class_name(const void *handle);
 
 /* Monotonic milliseconds, for measuring waits. */
@@ -94,6 +98,53 @@ char *syn_test_string_copy(const void *handle);
 /* A wrapper built with the library's entry macro that raises inside the call,
  * so the entry macro's exception report is what gets tested (KTD4). */
 void syn_test_wrapper_raises(void);
+
+/* ---- the callback machinery, for the U14 suites ---- */
+
+/* Installs a target/action trampoline on an NSControl handle, and fires it.
+ * The trampoline itself is what U7 installs on a button; these two drive it
+ * before a wrapped control exists. A null `action` uninstalls. */
+void syn_test_install_action(const void *handle, ns_action action,
+                             void *context);
+void syn_test_fire_action(const void *handle);
+
+/* True when the object behind `handle` has a delegate at all, and whether that
+ * delegate answers `selector`. AppKit caches the answer when the slot is
+ * assigned, so the second one is how a suite sees what AppKit saw. */
+bool syn_test_has_delegate(const void *handle);
+bool syn_test_delegate_responds(const void *handle, const char *selector);
+
+/* How many shims are alive, so a suite can watch a replaced or uninstalled one
+ * go away. Negative in a release build, which keeps no counter. */
+long syn_test_shim_live_count(void);
+
+/* Asserts that exactly `expected` shims are alive. A release build keeps no
+ * count and the assertion steps aside there. */
+#define SYN_ASSERT_SHIMS(expected)                                            \
+  do {                                                                        \
+    long syn_live_ = syn_test_shim_live_count();                              \
+    if (syn_live_ >= 0 && syn_live_ != (long)(expected))                      \
+      SYN_FAIL("expected %ld live shim(s), found %ld", (long)(expected),      \
+               syn_live_);                                                    \
+  } while (0)
+
+/* The shim machinery's debug validation of what a callback returns, and its
+ * required-member report, driven through a stand-in protocol: no protocol U14
+ * wraps has a required member or a member that returns anything, and six later
+ * units have both (R9, KTD8). Each one aborts in a debug build on the value it
+ * rejects, and does nothing at all under NDEBUG.
+ *
+ * The stand-in's table marks one member required, so installing with
+ * `set_required` false is the missing-required-member case. */
+void syn_test_install_required_member_struct(const void *handle,
+                                             bool set_required);
+void syn_test_shim_check_count(long count);
+void syn_test_shim_check_returned_handle(const void *handle);
+
+/* Posts an AppKit notification by name with `object` as its object. AppKit
+ * delivers its own delegate notifications this way, so this fires a delegate
+ * member that only a real launch or termination would otherwise reach. */
+void syn_test_post_notification(const char *name, const void *object);
 
 typedef struct {
   bool aborted;      /* terminated by SIGABRT */

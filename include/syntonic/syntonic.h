@@ -16,7 +16,12 @@
 #include <stddef.h>
 #include <stdint.h>
 
+/* One line per public header, in alphabetical order; a new wrapper adds
+ * its own in the same commit (R6). */
+#include <syntonic/ns_application.h>
 #include <syntonic/ns_base.h>
+#include <syntonic/ns_view_controller.h>
+#include <syntonic/ns_window.h>
 
 #ifdef __cplusplus
 extern "C" {
