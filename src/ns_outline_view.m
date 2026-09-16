@@ -170,8 +170,8 @@ SYN_SHIM_TABLE(syn_outline_view_table, ns_outline_view_callbacks,
 }
 
 /* KTD6: the struct supplies one borrowed string, optionally a second one for
- * the row's icon, and the wrapper owns the view. Both strings are copied
- * before this method returns. */
+ * the row's icon, and the wrapper owns the view. Each string is copied before
+ * the next call into caller code, so neither pointer outlives its callback. */
 - (NSView *)outlineView:(NSOutlineView *)outlineView
      viewForTableColumn:(NSTableColumn *)tableColumn
                    item:(id)item {
@@ -183,6 +183,10 @@ SYN_SHIM_TABLE(syn_outline_view_table, ns_outline_view_callbacks,
                               syn_outline_pointer(item));
   SYN_SHIM_CHECK_NONNULL(syn_outline_view_table, cell_string, text);
   SYN_SHIM_CHECK_UTF8(syn_outline_view_table, cell_string, text);
+  /* Copied here rather than in syn_cell_view: cell_symbol_name below re-enters
+   * caller code, which is free to hand back the same buffer cell_string just
+   * returned, and the borrowed pointer is only good until then (R11). */
+  NSString *label = text != NULL ? @(text) : nil;
 
   /* Null is an answer here, not a report: a row with no icon - a group
    * heading - is what the member says so with. */
@@ -194,7 +198,7 @@ SYN_SHIM_TABLE(syn_outline_view_table, ns_outline_view_callbacks,
                             syn_outline_pointer(item))
           : NULL;
   SYN_SHIM_CHECK_UTF8(syn_outline_view_table, cell_symbol_name, symbol);
-  return syn_cell_view(outlineView, tableColumn, text, symbol);
+  return syn_cell_view(outlineView, tableColumn, label, symbol);
   SYN_SHIM_LEAVE();
 }
 

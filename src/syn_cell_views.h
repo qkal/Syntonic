@@ -12,9 +12,8 @@
 
 #import <AppKit/AppKit.h>
 
-/* The cell view for one cell of `table`, carrying `utf8` as its label's text
- * and, when `symbol` is not null, that SF Symbol as an icon ahead of the
- * label.
+/* The cell view for one cell of `table`, carrying `label` as its text and,
+ * when `symbol` is not null, that SF Symbol as an icon ahead of the label.
  *
  * -[NSTableView makeViewWithIdentifier:owner:] returns nil until something has
  * been built with that identifier, because there is no nib to unarchive one
@@ -28,16 +27,18 @@
  * icon existed. An outline whose struct leaves `cell_symbol_name` unset
  * therefore gets the identical view it got before.
  *
- * `utf8` is the borrowed string a callbacks struct just returned, valid only
- * until that callback returns, so it is copied into the label here and the
- * pointer is never kept (R11, KTD17); `symbol` is borrowed the same way.
- * `column` may be nil, which is what AppKit passes for a group row; the
- * fallback identifier is used then.
+ * `label` is the copy the shim already made of the borrowed string its
+ * callbacks struct returned, because a shim that asks the struct twice has to
+ * copy the first answer before the second call (R11, KTD17). `symbol` is still
+ * a borrowed pointer, used and copied before this returns. `label` may be nil,
+ * which is the empty label an invalid or absent string leaves. `column` may be
+ * nil, which is what AppKit passes for a group row; the fallback identifier is
+ * used then.
  *
  * The returned view is autoreleased, exactly as AppKit's own delegate methods
  * return one, and the caller hands it straight back to AppKit.
  */
 NSTableCellView *syn_cell_view(NSTableView *table, NSTableColumn *column,
-                               const char *utf8, const char *symbol);
+                               NSString *label, const char *symbol);
 
 #endif /* SYNTONIC_SRC_SYN_CELL_VIEWS_H */
