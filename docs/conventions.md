@@ -476,6 +476,12 @@ Rule owner: R11, KTD17.
 | `NSIndexSet` argument | a single index in v0 | `-[NSTableView selectRowIndexes:byExtendingSelection:]` becomes a select-one-row function |
 | `id` object value | a UTF-8 string in v0, as table and combo box cells do | `-[NSComboBox objectValueOfSelectedItem]` becomes an owned `char *` |
 | `NSDictionary`, `NSAttributedString` | out of scope for v0 | wrap the rest of the class and say so |
+| **array of arrays in** | an array of **row descriptors** plus a row count. A row descriptor is a struct of a pointer plus a count — the one-dimensional rule, one level down. All of it is borrowed for the call. | `+[NSGridView gridViewWithViews:]` becomes `ns_grid_view_create_with_views(const ns_grid_view_row *rows, long row_count)`, where `ns_grid_view_row` is `{ns_view *const *views; long count;}` |
+
+The row descriptor is declared in the header that takes it and named for that
+header, not for the AppKit class it feeds: `ns_grid_view_row` is a boundary
+shape, and `ns_grid_row` — if a later unit wraps `NSGridRow` — is a handle.
+Rows may be ragged; the receiver decides what a short row means.
 
 Foundation objects appear only where AppKit forces them, and then as opaque
 handles under the same ownership rule as everything else.
@@ -1132,6 +1138,7 @@ named section in its own commit; nothing else in the document moves.
 | U14 ✓ | landed: the application and window rows of the per-protocol table, confirmed against the shipped structs; [How a wrapper installs one](#how-a-wrapper-installs-one), which is `src/syn_shims.h` as the six later units use it; `+[NSApplication sharedApplication]` on the [borrowed-return allowlist](#the-mechanical-rule-read-the-sdk-propertys-attribute); `NSWindow`'s `releasedWhenClosed` fixup confirmed. The view controller needed no row: NSViewController has no protocol Syntonic wraps |
 | U6 ✓ | landed: [The index check](#the-index-check) in [Misuse checks](#misuse-checks-and-exceptions), which is `NS_CHECK_INDEX` and where not to use it; the dropped-segment rule in [Constructors](#constructors), for a selector segment whose type cannot cross; [An enum from a header that is not wrapped](#an-enum-from-a-header-that-is-not-wrapped), for `ns_event_modifier_flags`; `-[NSMenu itemAtIndex:]` confirmed on the [borrowed-return allowlist](#the-mechanical-rule-read-the-sdk-propertys-attribute). No per-protocol row and no post-init fixup: v0 wraps no menu protocol, and neither `NSMenu` nor `NSMenuItem` needs a line after construction |
 | U7 ✓ | landed: the accessibility setters and the role-as-a-string decision in [Accessibility](#accessibility); the text-field row of the per-protocol table, confirmed against the shipped struct; the inherited-API-through-the-upcast rule in [Upcasts](#upcasts), which is why there is no `ns_button_set_action`. No post-init fixup: none of `NSView`, `NSControl`, `NSButton`, `NSTextField` or `NSPopUpButton` needs a line after construction |
+| U15 ✓ | landed: the **array of arrays** rule in [Boundary types](#boundary-types), which is `ns_grid_view_row`. No per-protocol row and no post-init fixup: v0 wraps no stack, grid, font or colour protocol. Two things the document was silent on, decided here and recorded in the headers rather than in this document: `NSEdgeInsets` crosses as Syntonic's own `ns_edge_insets` struct, because Foundation's `NSGeometry.h` is not includable from C; a `strong` **class** property such as `+[NSColor labelColor]` is borrowed under the existing property-attribute rule and needs no allowlist row |
 | U8 | the table and outline rows of the per-protocol table, confirmed against the shipped structs |
 | U9 | the toolbar row, including the dropped identifier methods |
 | U10 | anything the tab view controller needs that is not already here |

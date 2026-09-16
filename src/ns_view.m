@@ -90,6 +90,82 @@ bool ns_view_hidden(ns_view *view) {
   NS_LEAVE();
 }
 
+CGRect ns_view_bounds(ns_view *view) {
+  NS_ENTER();
+  return NS_IN(NSView, view).bounds;
+  NS_LEAVE();
+}
+
+/* A nil target means the window's base coordinates, which is why the parameter
+ * is optional (R12). */
+CGRect ns_view_convert_rect_to_view(ns_view *view, CGRect rect,
+                                    ns_view *target) {
+  NS_ENTER();
+  return [NS_IN(NSView, view) convertRect:rect toView:NS_IN_OPT(NSView, target)];
+  NS_LEAVE();
+}
+
+/* The three layout members below are NSView's, declared by
+ * NSLayoutConstraint.h rather than NSView.h (R6). */
+CGSize ns_view_intrinsic_content_size(ns_view *view) {
+  NS_ENTER();
+  return NS_IN(NSView, view).intrinsicContentSize;
+  NS_LEAVE();
+}
+
+void ns_view_set_content_hugging_priority_for_orientation(
+    ns_view *view, float priority,
+    ns_layout_constraint_orientation orientation) {
+  NS_ENTER();
+  [NS_IN(NSView, view)
+      setContentHuggingPriority:(NSLayoutPriority)priority
+                 forOrientation:(NSLayoutConstraintOrientation)orientation];
+  NS_LEAVE();
+}
+
+float ns_view_content_hugging_priority_for_orientation(
+    ns_view *view, ns_layout_constraint_orientation orientation) {
+  NS_ENTER();
+  return (float)[NS_IN(NSView, view)
+      contentHuggingPriorityForOrientation:(NSLayoutConstraintOrientation)
+                                               orientation];
+  NS_LEAVE();
+}
+
+void ns_view_set_content_compression_resistance_priority_for_orientation(
+    ns_view *view, float priority,
+    ns_layout_constraint_orientation orientation) {
+  NS_ENTER();
+  [NS_IN(NSView, view)
+      setContentCompressionResistancePriority:(NSLayoutPriority)priority
+                               forOrientation:(NSLayoutConstraintOrientation)
+                                                  orientation];
+  NS_LEAVE();
+}
+
+float ns_view_content_compression_resistance_priority_for_orientation(
+    ns_view *view, ns_layout_constraint_orientation orientation) {
+  NS_ENTER();
+  return (float)[NS_IN(NSView, view)
+      contentCompressionResistancePriorityForOrientation:
+          (NSLayoutConstraintOrientation)orientation];
+  NS_LEAVE();
+}
+
+void ns_view_set_next_key_view(ns_view *view, ns_view *next_key_view) {
+  NS_ENTER();
+  NS_IN(NSView, view).nextKeyView = NS_IN_OPT(NSView, next_key_view);
+  NS_LEAVE();
+}
+
+/* Borrowed: `nextKeyView` is an unretained property, which is the shape NS_OUT
+ * is right for (R7). */
+ns_view *ns_view_next_key_view(ns_view *view) {
+  NS_ENTER();
+  return NS_OUT(ns_view, NS_IN(NSView, view).nextKeyView);
+  NS_LEAVE();
+}
+
 /* R23: the only place the library touches an accessibility property is the one
  * the caller asked it to. A value set here replaces AppKit's own inference,
  * and null replaces it with nothing - AppKit does not infer again. */

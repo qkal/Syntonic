@@ -31,9 +31,10 @@ extern "C" {
 /* The handle. One opaque struct type per AppKit class (R4, KTD9). */
 typedef struct ns_control ns_control;
 
-/* Declared by ns_view.h and repeated here so this header stands alone. C has
- * allowed a repeated typedef of the same type since C11. */
+/* Declared by ns_view.h and ns_font.h and repeated here so this header stands
+ * alone. C has allowed a repeated typedef of the same type since C11. */
 typedef struct ns_view ns_view;
+typedef struct ns_font ns_font;
 
 /* -[NSControl setEnabled:] - a disabled control is greyed out and fires no
  * action. */
@@ -69,6 +70,18 @@ void ns_control_perform_click(ns_control *_Nonnull control)
  * SEL and an `id` (R11) - so the wrapper supplies the control's own pair and
  * the name drops them. True when an action was installed and it fired. */
 bool ns_control_send_action(ns_control *_Nonnull control)
+    API_AVAILABLE(macos(26.0));
+
+/* -[NSControl setFont:] - the type a control draws its text in, which is where
+ * a label's bold header comes from (R17). The control copies the font, so
+ * releasing your own reference afterwards is correct; null restores AppKit's
+ * own default. */
+void ns_control_set_font(ns_control *_Nonnull control, ns_font *_Nullable font)
+    API_AVAILABLE(macos(26.0));
+
+/* -[NSControl font] - `font` is a copy property, so this is owned: release it
+ * with ns_release (R7). */
+ns_font *_Nullable ns_control_copy_font(ns_control *_Nonnull control)
     API_AVAILABLE(macos(26.0));
 
 /* Installs the target/action callback: `action` runs on the main thread with

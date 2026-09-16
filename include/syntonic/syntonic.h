@@ -21,11 +21,16 @@
 #include <syntonic/ns_application.h>
 #include <syntonic/ns_base.h>
 #include <syntonic/ns_button.h>
+#include <syntonic/ns_color.h>
 #include <syntonic/ns_control.h>
+#include <syntonic/ns_font.h>
+#include <syntonic/ns_grid_view.h>
+#include <syntonic/ns_layout.h>
 #include <syntonic/ns_menu.h>
 #include <syntonic/ns_menu_bar.h>
 #include <syntonic/ns_menu_item.h>
 #include <syntonic/ns_pop_up_button.h>
+#include <syntonic/ns_stack_view.h>
 #include <syntonic/ns_text_field.h>
 #include <syntonic/ns_view.h>
 #include <syntonic/ns_view_controller.h>
