@@ -246,6 +246,17 @@ SYN_ABORT_CASE(appkit_raises_inside_a_wrapper) {
   syn_test_wrapper_raises();
 }
 
+/* Without the check the null only shows up as a crash on a later run-loop
+ * turn, with ns_main_thread_dispatch nowhere in the backtrace (R12). */
+SYN_ABORT_CASE(null_action_at_a_dispatch) {
+  syn_test_bootstrap();
+  /* Through a variable: a literal null at a _Nonnull parameter is a compile
+   * error, which is the header's half of the contract. The debug check is the
+   * other half, for the null that only turns up at run time. */
+  ns_action action = NULL;
+  ns_main_thread_dispatch(action, NULL);
+}
+
 SYN_TEST(ae3_a_call_off_the_main_thread_names_the_function_and_the_rule) {
   SYN_ASSERT_ABORTS("off_the_main_thread", "ns_retain");
   SYN_ASSERT_ABORTS("off_the_main_thread", "main thread only");
@@ -268,6 +279,12 @@ SYN_TEST(a_null_string_at_a_non_null_position_is_reported) {
 
 SYN_TEST(an_invalid_utf8_string_is_reported_in_a_debug_build) {
   SYN_ASSERT_ABORTS("invalid_utf8_string", "not valid UTF-8");
+}
+
+SYN_TEST(a_null_dispatch_action_names_the_function_and_the_rule) {
+  SYN_ASSERT_ABORTS("null_action_at_a_dispatch", "ns_main_thread_dispatch");
+  SYN_ASSERT_ABORTS("null_action_at_a_dispatch",
+                    "the callback is null at a non-null parameter");
 }
 
 SYN_TEST(an_appkit_exception_inside_a_wrapper_names_it_and_the_function) {

@@ -142,6 +142,20 @@ void syn_shim_report_null(const syn_shim_table *table, const char *member,
   syn_shim_stop();
 }
 
+/* The same bytes at a wrapper parameter are reported and stop the process, so
+ * a callback's string is held to the rule too rather than becoming an empty
+ * cell (R11, KTD8). */
+void syn_shim_report_utf8(const syn_shim_table *table, const char *member,
+                          const char *utf8) {
+  if (utf8 == NULL) return;
+  if ([NSString stringWithUTF8String:utf8] != nil) return;
+  fprintf(stderr,
+          "syntonic: %s's member %s returned a string that is not valid UTF-8; "
+          "text crosses the boundary as UTF-8 (R11, KTD8).\n",
+          table->protocol, member);
+  syn_shim_stop();
+}
+
 void syn_shim_report_handle(const syn_shim_table *table, const char *member,
                             const void *handle, Class expected,
                             bool required) {

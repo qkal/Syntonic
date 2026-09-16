@@ -104,4 +104,14 @@ if(PROJECT_IS_TOP_LEVEL)
     add_custom_command(TARGET ${test_name} POST_BUILD
       COMMAND dsymutil $<TARGET_FILE:${test_name}>)
   endforeach()
+
+  # The fixture test_runner_self spawns to prove the runner's ordinary
+  # pass/fail loop: it holds a test that fails on purpose. It is not a
+  # tests/test_*.c, so the glob above leaves it alone, and it is deliberately
+  # never add_test'd - `just test` must not run it directly.
+  add_executable(fixture_runner_loop
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixture_runner_loop.c")
+  target_link_libraries(fixture_runner_loop
+    PRIVATE syntonic_test_support syntonic_flags)
+  add_dependencies(test_runner_self fixture_runner_loop)
 endif()

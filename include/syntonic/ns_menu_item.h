@@ -72,7 +72,7 @@ void ns_menu_item_set_title(ns_menu_item *_Nonnull item,
 
 /* -[NSMenuItem title] - `title` is a copy property, so this is an owned copy
  * the caller frees with ns_string_free (R7, R11). */
-char *_Nullable ns_menu_item_copy_title(ns_menu_item *_Nonnull item)
+char *_Nonnull ns_menu_item_copy_title(ns_menu_item *_Nonnull item)
     API_AVAILABLE(macos(26.0));
 
 /* -[NSMenuItem setKeyEquivalent:] - the unmodified character, "" for none.
@@ -83,7 +83,7 @@ void ns_menu_item_set_key_equivalent(ns_menu_item *_Nonnull item,
 
 /* -[NSMenuItem keyEquivalent] - a copy property, so this is an owned copy the
  * caller frees with ns_string_free (R7, R11). */
-char *_Nullable ns_menu_item_copy_key_equivalent(ns_menu_item *_Nonnull item)
+char *_Nonnull ns_menu_item_copy_key_equivalent(ns_menu_item *_Nonnull item)
     API_AVAILABLE(macos(26.0));
 
 /* -[NSMenuItem setKeyEquivalentModifierMask:] - combine the flags with the

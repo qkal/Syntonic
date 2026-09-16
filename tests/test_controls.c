@@ -463,6 +463,45 @@ SYN_TEST(selecting_outside_the_items_names_the_function_and_the_range) {
                     "index -2 is out of range");
 }
 
+/* An array in is a pointer plus a count (KTD17). A null array with a count of
+ * zero is an empty array; the other two shapes are misuse. */
+SYN_TEST(adding_no_titles_from_a_null_array_is_an_empty_list) {
+  syn_test_bootstrap();
+  ns_pop_up_button *pop_up =
+      ns_pop_up_button_create_with_frame_pulls_down(CGRectZero, false);
+  ns_pop_up_button_add_items_with_titles(pop_up, NULL, 0);
+  SYN_ASSERT_MSG(ns_pop_up_button_number_of_items(pop_up) == 0,
+                 "a null array with a count of zero added %ld item(s)",
+                 ns_pop_up_button_number_of_items(pop_up));
+  ns_release(pop_up);
+}
+
+SYN_ABORT_CASE(titles_added_from_a_negative_count) {
+  syn_test_bootstrap();
+  ns_pop_up_button *pop_up =
+      ns_pop_up_button_create_with_frame_pulls_down(CGRectZero, false);
+  const char *const titles[] = {"Kernel"};
+  ns_pop_up_button_add_items_with_titles(pop_up, titles, -1);
+}
+
+SYN_ABORT_CASE(titles_added_from_a_null_array) {
+  syn_test_bootstrap();
+  ns_pop_up_button *pop_up =
+      ns_pop_up_button_create_with_frame_pulls_down(CGRectZero, false);
+  ns_pop_up_button_add_items_with_titles(pop_up, NULL, 2);
+}
+
+SYN_TEST(an_array_in_of_the_wrong_shape_names_the_function_and_the_count) {
+  SYN_ASSERT_ABORTS("titles_added_from_a_negative_count",
+                    "ns_pop_up_button_add_items_with_titles");
+  SYN_ASSERT_ABORTS("titles_added_from_a_negative_count",
+                    "the element count is -1");
+  SYN_ASSERT_ABORTS("titles_added_from_a_null_array",
+                    "ns_pop_up_button_add_items_with_titles");
+  SYN_ASSERT_ABORTS("titles_added_from_a_null_array",
+                    "the array is null at a count of 2");
+}
+
 SYN_ABORT_CASE(a_view_passed_where_a_button_belongs) {
   syn_test_bootstrap();
   ns_view *view = ns_view_create_with_frame(CGRectMake(0, 0, 10, 10));

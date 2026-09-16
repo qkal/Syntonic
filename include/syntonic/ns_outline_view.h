@@ -13,6 +13,12 @@
  * of top-level rows. The wrapper never dereferences an item and never frees
  * one; keeping the nodes alive is yours.
  *
+ * AN ADDRESS IS PERMANENT IDENTITY. The cache keys on the raw address for the
+ * outline view's whole life and evicts nothing by itself, so **free or reuse a
+ * node's address only after ns_outline_view_forget_item** on it. Without that,
+ * an allocator that hands the same address to a different node gets the old
+ * node's box back, and with it the old row's expansion and selection state.
+ *
  * THE MERGED STRUCT (KTD6). Counts and children come from
  * NSOutlineViewDataSource, cells and selection from NSOutlineViewDelegate, and
  * Syntonic merges the pair into one ns_outline_view_callbacks so that one call
@@ -230,6 +236,17 @@ void ns_outline_view_select_item(ns_outline_view *_Nonnull outline_view,
  * displayed row scrolls nothing (R16). syntonic-owned. */
 void ns_outline_view_scroll_item_to_visible(
     ns_outline_view *_Nonnull outline_view, const void *_Nullable item)
+    API_AVAILABLE(macos(26.0));
+
+/* Drops the wrapper's box for `item`, so the next call that names that address
+ * boxes it again as a new item: the outline forgets the row's expansion and
+ * selection state along with it. Call it before freeing a node or reusing its
+ * address for another one - the cache treats an address as permanent identity
+ * for the outline view's whole life and evicts nothing on its own. An address
+ * the outline has never seen, and a null item, forget nothing. Reload after
+ * forgetting an item AppKit still has a row for. syntonic-owned. */
+void ns_outline_view_forget_item(ns_outline_view *_Nonnull outline_view,
+                                 const void *_Nullable item)
     API_AVAILABLE(macos(26.0));
 
 /* Installs the merged struct as both the outline's data source and its

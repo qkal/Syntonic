@@ -46,7 +46,7 @@ CGFloat ns_font_system_font_size(void) API_AVAILABLE(macos(26.0));
 
 /* -[NSFont fontName] - a copy property, so this is an owned copy the caller
  * frees with ns_string_free (R7, R11). */
-char *_Nullable ns_font_copy_font_name(ns_font *_Nonnull font)
+char *_Nonnull ns_font_copy_font_name(ns_font *_Nonnull font)
     API_AVAILABLE(macos(26.0));
 
 /* -[NSFont pointSize] */

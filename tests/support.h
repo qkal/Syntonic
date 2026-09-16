@@ -198,6 +198,15 @@ syn_test_abort_result syn_test_expect_abort(const char *case_name);
 
 void syn_test_abort_result_free(syn_test_abort_result *result);
 
+/* Runs a sibling fixture binary - one built beside this suite and deliberately
+ * not registered with CTest - through the runner's ordinary test loop, the way
+ * syn_test_expect_abort runs a case: posix_spawn, a pipe and a deadline. This
+ * one captures stdout, which is where the loop prints its ok, FAIL and summary
+ * lines. Returns that output, malloc'd and NUL-terminated, never null; free it
+ * with free. `*exit_status` is the child's exit code, or -1 when it died on a
+ * signal or timed out. */
+char *syn_test_run_fixture(const char *name, int *exit_status);
+
 /* Returns NULL when the case aborted and its stderr contained `needle`, and
  * otherwise a malloc'd explanation including the child's stderr. */
 char *syn_test_check_abort(const char *case_name, const char *needle);

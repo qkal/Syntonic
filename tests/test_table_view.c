@@ -612,6 +612,29 @@ SYN_ABORT_CASE(cell_string_returning_null) {
   ns_table_view_view_at_column_row_make_if_necessary(table, 0, 0, true);
 }
 
+/* R11, KTD8: malformed bytes from a callback are reported, not dropped for an
+ * empty cell, exactly as they are at a wrapper parameter. */
+static const char *syn_malformed_cell(void *context, ns_table_view *sender,
+                                      long column, long row) {
+  (void)context;
+  (void)sender;
+  (void)column;
+  (void)row;
+  return "\xff\xfe not utf-8";
+}
+
+SYN_ABORT_CASE(cell_string_returning_malformed_utf8) {
+  syn_test_bootstrap();
+  syn_reset();
+  ns_scroll_view *scroll = NULL;
+  ns_table_view *table = syn_table_create(&scroll);
+  ns_table_view_callbacks callbacks = {.number_of_rows = syn_rows,
+                                       .cell_string = syn_malformed_cell};
+  ns_table_view_set_callbacks(table, &callbacks, NULL);
+  ns_table_view_reload_data(table);
+  ns_table_view_view_at_column_row_make_if_necessary(table, 0, 0, true);
+}
+
 static long syn_negative_rows(void *context, ns_table_view *sender) {
   (void)context;
   (void)sender;
@@ -637,6 +660,8 @@ SYN_TEST(a_bad_value_from_a_callback_names_the_member) {
                     "number_of_rows");
   SYN_ASSERT_ABORTS("number_of_rows_returning_a_negative_count",
                     "the count -3");
+  SYN_ASSERT_ABORTS("cell_string_returning_malformed_utf8", "cell_string");
+  SYN_ASSERT_ABORTS("cell_string_returning_malformed_utf8", "not valid UTF-8");
 }
 
 SYN_ABORT_CASE(row_selected_at_the_row_count) {

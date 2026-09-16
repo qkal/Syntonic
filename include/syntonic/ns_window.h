@@ -101,7 +101,7 @@ void ns_window_set_title(ns_window *_Nonnull window, const char *_Nonnull title)
 
 /* -[NSWindow title] - `title` is a copy property, so this is an owned copy the
  * caller frees with ns_string_free (R7, R11). */
-char *_Nullable ns_window_copy_title(ns_window *_Nonnull window)
+char *_Nonnull ns_window_copy_title(ns_window *_Nonnull window)
     API_AVAILABLE(macos(26.0));
 
 /* -[NSWindow contentView] - a strong property, so this is borrowed: valid

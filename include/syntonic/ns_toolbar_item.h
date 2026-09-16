@@ -71,7 +71,7 @@ ns_toolbar_item *_Nonnull ns_toolbar_item_create_with_item_identifier(
 
 /* -[NSToolbarItem itemIdentifier] - a copy property, so this is an owned copy
  * the caller frees with ns_string_free (R7, R11). */
-char *_Nullable ns_toolbar_item_copy_item_identifier(
+char *_Nonnull ns_toolbar_item_copy_item_identifier(
     ns_toolbar_item *_Nonnull toolbar_item) API_AVAILABLE(macos(26.0));
 
 /* -[NSToolbarItem setLabel:] - the text under the item in the toolbar, and the
@@ -82,7 +82,7 @@ void ns_toolbar_item_set_label(ns_toolbar_item *_Nonnull toolbar_item,
 
 /* -[NSToolbarItem label] - a copy property, so this is an owned copy the
  * caller frees with ns_string_free (R7, R11). */
-char *_Nullable ns_toolbar_item_copy_label(
+char *_Nonnull ns_toolbar_item_copy_label(
     ns_toolbar_item *_Nonnull toolbar_item) API_AVAILABLE(macos(26.0));
 
 /* -[NSToolbarItem setPaletteLabel:] - the text under the item in the
@@ -94,7 +94,7 @@ void ns_toolbar_item_set_palette_label(ns_toolbar_item *_Nonnull toolbar_item,
 
 /* -[NSToolbarItem paletteLabel] - a copy property, so this is an owned copy
  * the caller frees with ns_string_free (R7, R11). */
-char *_Nullable ns_toolbar_item_copy_palette_label(
+char *_Nonnull ns_toolbar_item_copy_palette_label(
     ns_toolbar_item *_Nonnull toolbar_item) API_AVAILABLE(macos(26.0));
 
 /* -[NSToolbarItem setToolTip:] - null removes the tooltip. */

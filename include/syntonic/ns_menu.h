@@ -41,7 +41,7 @@ void ns_menu_set_title(ns_menu *_Nonnull menu, const char *_Nonnull title)
 
 /* -[NSMenu title] - `title` is a copy property, so this is an owned copy the
  * caller frees with ns_string_free (R7, R11). */
-char *_Nullable ns_menu_copy_title(ns_menu *_Nonnull menu)
+char *_Nonnull ns_menu_copy_title(ns_menu *_Nonnull menu)
     API_AVAILABLE(macos(26.0));
 
 /* -[NSMenu addItem:] - appends. The menu retains the item, so releasing your

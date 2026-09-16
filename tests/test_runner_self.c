@@ -111,6 +111,25 @@ SYN_TEST(expect_abort_reports_no_abort_for_a_case_that_returns) {
                  signal_number, exit_status);
 }
 
+/* ---- the ordinary pass/fail loop, which every other suite reports through ---- */
+
+SYN_TEST(the_loop_reports_each_test_and_exits_one_on_a_failure) {
+  int status = 0;
+  char *output = syn_test_run_fixture("fixture_runner_loop", &status);
+  bool ok =
+      status == 1 &&
+      strstr(output, "ok   a_passing_test_for_the_loop_to_report") != NULL &&
+      strstr(output, "FAIL a_failing_test_for_the_loop_to_report") != NULL &&
+      strstr(output, "2 test(s), 1 failure(s)") != NULL;
+  if (!ok) fprintf(stderr, "fixture stdout:\n%s", output);
+  free(output);
+
+  SYN_ASSERT_MSG(ok,
+                 "the fixture suite exited %d; expected exit 1 with an ok "
+                 "line, a FAIL line and the summary on stdout",
+                 status);
+}
+
 SYN_TEST(a_failing_assertion_exits_one_naming_file_and_line) {
   syn_test_abort_result result = syn_test_expect_abort("failing_assertion");
   bool ok = !result.aborted && !result.timed_out && result.signal == 0 &&

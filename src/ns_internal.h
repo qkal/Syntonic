@@ -82,6 +82,9 @@ void ns_internal_check_handle(const void *handle, Class expected, bool required,
 void ns_internal_check_utf8(const char *utf8, bool required,
                             const char *function);
 void ns_internal_check_index(long index, long largest, const char *function);
+void ns_internal_check_array(const void *values, long count,
+                             const char *function);
+void ns_internal_check_callback(const void *callback, const char *function);
 __attribute__((noreturn)) void ns_internal_report_exception(
     NSException *exception, const char *function);
 
@@ -105,6 +108,18 @@ __attribute__((noreturn)) void ns_internal_report_exception(
 #define NS_CHECK_INDEX(index, largest)                                        \
   ns_internal_check_index((index), (largest), __func__)
 
+/* R12: `count` is negative, or `values` is null at a positive count. A null
+ * array with a count of zero is an empty array and passes. The array-in macros
+ * below carry this; a wrapper never writes it by hand. */
+#define NS_CHECK_ARRAY(values, count)                                         \
+  ns_internal_check_array((const void *)(values), (count), __func__)
+
+/* R12: a function pointer is null at a _Nonnull position. The scalar handle
+ * and string checks cover every other _Nonnull parameter; this one covers the
+ * callback ns_main_thread_dispatch takes. */
+#define NS_CHECK_CALLBACK(callback)                                           \
+  ns_internal_check_callback((const void *)(callback), __func__)
+
 /* KTD4: report an AppKit exception rather than unwinding through C frames,
  * which would skip both the C cleanups and the ARC releases. */
 #define NS_TRY_BEGIN @try {
@@ -120,6 +135,8 @@ __attribute__((noreturn)) void ns_internal_report_exception(
 #define NS_CHECK_HANDLE(handle, cls, required) ((void)0)
 #define NS_CHECK_UTF8(utf8, required) ((void)0)
 #define NS_CHECK_INDEX(index, largest) ((void)0)
+#define NS_CHECK_ARRAY(values, count) ((void)0)
+#define NS_CHECK_CALLBACK(callback) ((void)0)
 #define NS_TRY_BEGIN
 #define NS_TRY_END
 
@@ -203,7 +220,12 @@ char *ns_internal_string_out(NSString *string);
  * An array in is a pointer plus a count, borrowed for the call: both macros
  * convert element by element and yield a fresh NSArray, and neither keeps the
  * C pointer. Each one evaluates `count` once and `values` or `handles` once
- * per element.
+ * per element plus once for the shape check.
+ *
+ * Both check the shape first: a negative count and a null array at a positive
+ * count are misuse and stop a debug build, the same way a null handle at a
+ * _Nonnull position does. A null array with a count of zero is an empty array
+ * and passes.
  *
  * Macros rather than functions for the reason the checks above are macros:
  * NS_IN and NS_STRING_IN name the calling function in their report, and a
@@ -218,6 +240,7 @@ char *ns_internal_string_out(NSString *string);
 #define NS_STRING_ARRAY_IN(values, count, fallback)                           \
   ({                                                                          \
     long ns_array_count_ = (count);                                           \
+    NS_CHECK_ARRAY((values), ns_array_count_);                                \
     NSMutableArray<NSString *> *ns_array_ = [NSMutableArray                   \
         arrayWithCapacity:(NSUInteger)(ns_array_count_ > 0 ? ns_array_count_  \
                                                            : 0)];             \
@@ -235,6 +258,7 @@ char *ns_internal_string_out(NSString *string);
 #define NS_VIEW_ARRAY_IN(handles, count)                                      \
   ({                                                                          \
     long ns_array_count_ = (count);                                           \
+    NS_CHECK_ARRAY((handles), ns_array_count_);                               \
     NSMutableArray<NSView *> *ns_array_ = [NSMutableArray                     \
         arrayWithCapacity:(NSUInteger)(ns_array_count_ > 0 ? ns_array_count_  \
                                                            : 0)];             \

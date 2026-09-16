@@ -86,6 +86,36 @@ void ns_internal_check_index(long index, long largest, const char *function) {
   ns_internal_stop();
 }
 
+/* An array in is a pointer plus a count (KTD17). A negative count would
+ * silently convert nothing, and a null array at a positive count would reach
+ * the indexed dereference, so both are reported here rather than at the crash
+ * or the wrong result they would otherwise cause (R12). */
+void ns_internal_check_array(const void *values, long count,
+                             const char *function) {
+  if (count < 0) {
+    fprintf(stderr,
+            "syntonic: %s: the element count is %ld; an array in is a pointer "
+            "plus a count of zero or more (R12).\n",
+            function, count);
+    ns_internal_stop();
+  }
+  if (count > 0 && values == NULL) {
+    fprintf(stderr,
+            "syntonic: %s: the array is null at a count of %ld; only a count "
+            "of zero may have a null array (R12).\n",
+            function, count);
+    ns_internal_stop();
+  }
+}
+
+void ns_internal_check_callback(const void *callback, const char *function) {
+  if (callback != NULL) return;
+  fprintf(stderr,
+          "syntonic: %s: the callback is null at a non-null parameter (R12).\n",
+          function);
+  ns_internal_stop();
+}
+
 void ns_internal_report_exception(NSException *exception,
                                   const char *function) {
   NSString *reason = exception.reason;
@@ -154,6 +184,10 @@ bool ns_available(int major, int minor) {
 
 void ns_main_thread_dispatch(ns_action action, void *context) {
   NS_ENTER_ANY_THREAD();
+  /* The one _Nonnull function pointer in the public surface: without this the
+   * null would only show up as a crash on a later run-loop turn, with this
+   * function nowhere in the backtrace (R12). */
+  NS_CHECK_CALLBACK(action);
   /* Always asynchronous, from the main thread as well: a callback that
    * sometimes runs before the call returns and sometimes after is the harder
    * contract to write against. */

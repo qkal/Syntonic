@@ -125,7 +125,7 @@ ns_toolbar *_Nonnull ns_toolbar_create_with_identifier(
 
 /* -[NSToolbar identifier] - a copy property, so this is an owned copy the
  * caller frees with ns_string_free (R7, R11). */
-char *_Nullable ns_toolbar_copy_identifier(ns_toolbar *_Nonnull toolbar)
+char *_Nonnull ns_toolbar_copy_identifier(ns_toolbar *_Nonnull toolbar)
     API_AVAILABLE(macos(26.0));
 
 /* -[NSToolbar items] - the count half of the array shape: `items` is a copy

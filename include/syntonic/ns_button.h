@@ -87,7 +87,7 @@ void ns_button_set_title(ns_button *_Nonnull button, const char *_Nonnull title)
 
 /* -[NSButton title] - `title` is a copy property, so this is an owned copy the
  * caller frees with ns_string_free (R7, R11). */
-char *_Nullable ns_button_copy_title(ns_button *_Nonnull button)
+char *_Nonnull ns_button_copy_title(ns_button *_Nonnull button)
     API_AVAILABLE(macos(26.0));
 
 /* -[NSButton setState:] */

@@ -215,7 +215,7 @@ void ns_combo_box_remove_all_items(ns_combo_box *_Nonnull combo_box)
  * owned copy the caller frees with ns_string_free (R7, R11). An index past the
  * end raises and the entry macro reports it (KTD4). The static list only: with
  * `usesDataSource` true, ask your own model instead. */
-char *_Nullable ns_combo_box_copy_item_object_value_at_index(
+char *_Nonnull ns_combo_box_copy_item_object_value_at_index(
     ns_combo_box *_Nonnull combo_box, long index) API_AVAILABLE(macos(26.0));
 
 /* -[NSComboBox indexOfItemWithObjectValue:] - -1 when the list carries no such

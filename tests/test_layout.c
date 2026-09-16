@@ -817,6 +817,27 @@ SYN_ABORT_CASE(arranged_subview_read_past_the_end) {
   ns_stack_view_arranged_subview_at_index(stack, 0);
 }
 
+SYN_ABORT_CASE(a_stack_built_from_a_negative_count) {
+  syn_test_bootstrap();
+  ns_view *view = ns_view_create_with_frame(CGRectMake(0, 0, 10, 10));
+  ns_view *const seed[] = {view};
+  ns_stack_view_create_with_views(seed, -3);
+}
+
+SYN_ABORT_CASE(a_stack_built_from_a_null_array) {
+  syn_test_bootstrap();
+  ns_stack_view_create_with_views(NULL, 1);
+}
+
+SYN_TEST(a_view_array_in_of_the_wrong_shape_names_the_function) {
+  SYN_ASSERT_ABORTS("a_stack_built_from_a_negative_count",
+                    "ns_stack_view_create_with_views");
+  SYN_ASSERT_ABORTS("a_stack_built_from_a_negative_count",
+                    "the element count is -3");
+  SYN_ASSERT_ABORTS("a_stack_built_from_a_null_array",
+                    "the array is null at a count of 1");
+}
+
 SYN_TEST(reading_an_arranged_subview_past_the_end_is_the_appkit_exception) {
   SYN_ASSERT_ABORTS("arranged_subview_read_past_the_end",
                     "ns_stack_view_arranged_subview_at_index");

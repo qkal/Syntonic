@@ -289,6 +289,49 @@ SYN_TEST(an_items_identity_and_its_expansion_survive_a_reload) {
   ns_release(scroll);
 }
 
+/* The cache keys on the raw address for the outline's whole life, so the only
+ * way to reuse an address is to forget it first: the next sight of it is a new
+ * item carrying none of the old row's state. */
+SYN_TEST(forgetting_an_item_makes_its_address_a_new_item) {
+  syn_test_bootstrap();
+  syn_reset();
+
+  ns_scroll_view *scroll = NULL;
+  ns_outline_view *outline = syn_outline_create(&scroll);
+  ns_table_view *as_table = ns_outline_view_as_table_view(outline);
+  ns_outline_view_set_callbacks(outline, &syn_sidebar_callbacks, NULL);
+  ns_table_view_reload_data(as_table);
+  ns_outline_view_expand_item(outline, &syn_groups[0]);
+
+  long row = ns_outline_view_row_for_item(outline, &syn_library[0]);
+  SYN_ASSERT_MSG(row == 1, "the first child is on row %ld, not 1", row);
+
+  /* A null item, and an address the outline has never boxed, forget nothing. */
+  int never_seen = 0;
+  ns_outline_view_forget_item(outline, NULL);
+  ns_outline_view_forget_item(outline, &never_seen);
+  SYN_ASSERT_MSG(ns_outline_view_row_for_item(outline, &syn_library[0]) == row,
+                 "forgetting nothing moved the row");
+
+  ns_outline_view_forget_item(outline, &syn_library[0]);
+  SYN_ASSERT_MSG(ns_outline_view_row_for_item(outline, &syn_library[0]) == -1,
+                 "the same address still came back as the row AppKit holds, so "
+                 "the box behind it is the old one");
+
+  /* Nothing is destroyed with it: the next reload boxes the address afresh and
+   * the row is back, and the group's own box - and with it its expansion - was
+   * never touched. */
+  ns_table_view_reload_data(as_table);
+  SYN_ASSERT_MSG(ns_outline_view_row_for_item(outline, &syn_library[0]) == row,
+                 "the forgotten address did not come back as a row");
+  SYN_ASSERT_MSG(ns_outline_view_item_expanded(outline, &syn_groups[0]),
+                 "forgetting a child collapsed its group");
+
+  ns_outline_view_set_callbacks(outline, NULL, NULL);
+  ns_release(outline);
+  ns_release(scroll);
+}
+
 /* ---- AE1: the optional member that is not set ---- */
 
 SYN_TEST(an_outline_with_should_expand_item_unset_expands) {
@@ -782,6 +825,59 @@ SYN_TEST(a_null_child_is_reported_with_the_member_named) {
   SYN_ASSERT_ABORTS("child_of_item_returning_null", "returned null");
   SYN_ASSERT_ABORTS("child_of_item_returning_null",
                     "NSOutlineViewDataSource + NSOutlineViewDelegate");
+}
+
+/* R11, KTD8: the same bytes at a wrapper parameter are reported and stop the
+ * process, so a string a callback returns is held to the rule too rather than
+ * being dropped for an empty cell. */
+static const char *syn_malformed_cell(void *context, ns_outline_view *sender,
+                                      const void *item) {
+  (void)context;
+  (void)sender;
+  (void)item;
+  return "\xff\xfe not utf-8";
+}
+
+SYN_ABORT_CASE(cell_string_returning_malformed_utf8) {
+  syn_test_bootstrap();
+  syn_reset();
+  ns_scroll_view *scroll = NULL;
+  ns_outline_view *outline = syn_outline_create(&scroll);
+  ns_outline_view_callbacks callbacks = {
+      .number_of_children_of_item = syn_children,
+      .child_of_item = syn_child,
+      .is_item_expandable = syn_expandable,
+      .cell_string = syn_malformed_cell};
+  ns_outline_view_set_callbacks(outline, &callbacks, NULL);
+  ns_table_view_reload_data(ns_outline_view_as_table_view(outline));
+  ns_table_view_view_at_column_row_make_if_necessary(
+      ns_outline_view_as_table_view(outline), 0, 0, true);
+}
+
+SYN_ABORT_CASE(cell_symbol_name_returning_malformed_utf8) {
+  syn_test_bootstrap();
+  syn_reset();
+  ns_scroll_view *scroll = NULL;
+  ns_outline_view *outline = syn_outline_create(&scroll);
+  ns_outline_view_callbacks callbacks = {
+      .number_of_children_of_item = syn_children,
+      .child_of_item = syn_child,
+      .is_item_expandable = syn_expandable,
+      .cell_string = syn_cell,
+      .cell_symbol_name = syn_malformed_cell};
+  ns_outline_view_set_callbacks(outline, &callbacks, NULL);
+  ns_table_view_reload_data(ns_outline_view_as_table_view(outline));
+  ns_table_view_view_at_column_row_make_if_necessary(
+      ns_outline_view_as_table_view(outline), 0, 0, true);
+}
+
+SYN_TEST(a_malformed_string_from_a_callback_names_the_member_and_the_rule) {
+  SYN_ASSERT_ABORTS("cell_string_returning_malformed_utf8", "cell_string");
+  SYN_ASSERT_ABORTS("cell_string_returning_malformed_utf8", "not valid UTF-8");
+  SYN_ASSERT_ABORTS("cell_symbol_name_returning_malformed_utf8",
+                    "cell_symbol_name");
+  SYN_ASSERT_ABORTS("cell_symbol_name_returning_malformed_utf8",
+                    "not valid UTF-8");
 }
 
 SYN_ABORT_CASE(an_outline_passed_where_a_column_belongs) {

@@ -72,7 +72,7 @@ long ns_pop_up_button_number_of_items(
 
 /* -[NSPopUpButton itemTitleAtIndex:] - the index half. A string Syntonic
  * returns is always an owned copy, freed with ns_string_free (R11). */
-char *_Nullable ns_pop_up_button_copy_item_title_at_index(
+char *_Nonnull ns_pop_up_button_copy_item_title_at_index(
     ns_pop_up_button *_Nonnull pop_up_button, long index)
     API_AVAILABLE(macos(26.0));
 

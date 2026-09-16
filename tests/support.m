@@ -393,14 +393,13 @@ static char *syn_drain(int fd, pid_t pid, double deadline_ms, bool *timed_out) {
   return buffer;
 }
 
-syn_test_abort_result syn_test_expect_abort(const char *case_name) {
+/* posix_spawn with one standard stream on a pipe and the other on /dev/null,
+ * drained to EOF or to the deadline. Both the abort helper and the fixture run
+ * below are this call with a different argv and a different captured stream. */
+static syn_test_abort_result syn_spawn_capture(const char *executable,
+                                               char *const argv[],
+                                               int captured_fd) {
   syn_test_abort_result result = {0};
-
-  char executable[PATH_MAX];
-  if (!syn_executable_path(executable, sizeof executable)) {
-    result.stderr_text = syn_copy_string("could not resolve the suite binary");
-    return result;
-  }
 
   int pipe_fds[2];
   if (pipe(pipe_fds) != 0) {
@@ -410,14 +409,13 @@ syn_test_abort_result syn_test_expect_abort(const char *case_name) {
 
   posix_spawn_file_actions_t actions;
   posix_spawn_file_actions_init(&actions);
-  posix_spawn_file_actions_adddup2(&actions, pipe_fds[1], STDERR_FILENO);
-  posix_spawn_file_actions_addopen(&actions, STDOUT_FILENO, "/dev/null",
-                                   O_WRONLY, 0);
+  posix_spawn_file_actions_adddup2(&actions, pipe_fds[1], captured_fd);
+  posix_spawn_file_actions_addopen(
+      &actions, captured_fd == STDERR_FILENO ? STDOUT_FILENO : STDERR_FILENO,
+      "/dev/null", O_WRONLY, 0);
   posix_spawn_file_actions_addclose(&actions, pipe_fds[0]);
   posix_spawn_file_actions_addclose(&actions, pipe_fds[1]);
 
-  char *argv[] = {executable, (char *)SYN_ABORT_CASE_FLAG, (char *)case_name,
-                  NULL};
   pid_t pid = -1;
   int spawned = posix_spawn(&pid, executable, &actions, NULL, argv,
                             *_NSGetEnviron());
@@ -446,6 +444,41 @@ syn_test_abort_result syn_test_expect_abort(const char *case_name) {
     result.exit_status = WEXITSTATUS(status);
   }
   return result;
+}
+
+syn_test_abort_result syn_test_expect_abort(const char *case_name) {
+  char executable[PATH_MAX];
+  if (!syn_executable_path(executable, sizeof executable)) {
+    syn_test_abort_result result = {0};
+    result.stderr_text = syn_copy_string("could not resolve the suite binary");
+    return result;
+  }
+
+  char *argv[] = {executable, (char *)SYN_ABORT_CASE_FLAG, (char *)case_name,
+                  NULL};
+  return syn_spawn_capture(executable, argv, STDERR_FILENO);
+}
+
+char *syn_test_run_fixture(const char *name, int *exit_status) {
+  if (exit_status != NULL) *exit_status = -1;
+
+  char executable[PATH_MAX];
+  if (!syn_executable_path(executable, sizeof executable))
+    return syn_copy_string("could not resolve the suite binary");
+
+  /* The fixture is built into the same directory as this suite. */
+  char *slash = strrchr(executable, '/');
+  if (slash == NULL) return syn_copy_string("the suite binary has no path");
+  slash[1] = '\0';
+  if (strlcat(executable, name, sizeof executable) >= sizeof executable)
+    return syn_copy_string("the fixture path does not fit");
+
+  char *argv[] = {executable, NULL};
+  syn_test_abort_result result =
+      syn_spawn_capture(executable, argv, STDOUT_FILENO);
+  if (exit_status != NULL && !result.timed_out && result.signal == 0)
+    *exit_status = result.exit_status;
+  return result.stderr_text; /* the captured stream: stdout, here */
 }
 
 void syn_test_abort_result_free(syn_test_abort_result *result) {

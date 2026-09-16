@@ -67,7 +67,7 @@ void ns_control_set_string_value(ns_control *_Nonnull control,
 
 /* -[NSControl stringValue] - `stringValue` is a copy property, so this is an
  * owned copy the caller frees with ns_string_free (R7, R11). */
-char *_Nullable ns_control_copy_string_value(ns_control *_Nonnull control)
+char *_Nonnull ns_control_copy_string_value(ns_control *_Nonnull control)
     API_AVAILABLE(macos(26.0));
 
 /* -[NSControl performClick:] - the click a user would make: a checkbox takes

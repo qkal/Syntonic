@@ -12,9 +12,11 @@
  *     just twin-c
  *
  * The environment the comparison protocol sets:
- *   SYNTONIC_TWIN_DUMP  path the layout report is written to after every
- *                       layout-changing event; docs/twin-comparison.md diffs
- *                       it against the Swift twin's
+ *   SYNTONIC_TWIN_DUMP  path the layout report is written to after every event
+ *                       this twin handles that changes the layout - selection,
+ *                       an edit, add, delete, search, the sidebar toggle, and
+ *                       the window moving or resizing; docs/twin-comparison.md
+ *                       diffs it against the Swift twin's
  *   SYNTONIC_TWIN_APPEARANCE  read by the Swift twin only: Syntonic wraps no
  *                       NSAppearance, so this twin follows the system theme
  */
@@ -196,15 +198,22 @@ static void twin_refilter(twin *t, bool keeping_selection) {
 static void twin_add_item(twin *t) {
   if (t->item_count == t->item_capacity) {
     long capacity = t->item_capacity * 2;
+    /* Each result is committed the moment it succeeds: realloc has already
+     * released the pointer it was handed, so freeing the other array on a
+     * partial failure would leave a dangling one in the struct. One array
+     * short leaves both valid at the old capacity and this Add a no-op. */
     twin_item *grown = realloc(t->items, (size_t)capacity * sizeof *grown);
-    long *grown_visible = realloc(t->visible, (size_t)capacity * sizeof *grown_visible);
+    if (grown != NULL) {
+      t->items = grown;
+    }
+    long *grown_visible =
+        realloc(t->visible, (size_t)capacity * sizeof *grown_visible);
+    if (grown_visible != NULL) {
+      t->visible = grown_visible;
+    }
     if (grown == NULL || grown_visible == NULL) {
-      free(grown);
-      free(grown_visible);
       return;
     }
-    t->items = grown;
-    t->visible = grown_visible;
     t->item_capacity = capacity;
   }
 
@@ -1122,21 +1131,40 @@ static ns_menu *twin_submenu_at(ns_menu *menu_bar, long index) {
   return ns_menu_item_submenu(ns_menu_item_at_index(menu_bar, index));
 }
 
-/* AppKit puts AutoFill, Start Dictation and Emoji & Symbols at the end of any
- * menu titled "Edit" the moment the menu bar is installed, so an app's own
- * Edit item is inserted after the standard item it follows rather than
- * appended - appending would land it below the system's. */
-static long twin_index_after(ns_menu *menu, const char *title) {
+/* The index of the item with this title, or -1. */
+static long twin_index_of(ns_menu *menu, const char *title) {
   long count = ns_menu_number_of_items(menu);
   for (long index = 0; index < count; index++) {
     char *found = ns_menu_item_copy_title(ns_menu_item_at_index(menu, index));
     bool matched = found != NULL && strcmp(found, title) == 0;
     ns_string_free(found);
     if (matched) {
-      return index + 1;
+      return index;
     }
   }
-  return count;
+  return -1;
+}
+
+/* AppKit puts AutoFill, Start Dictation and Emoji & Symbols at the end of any
+ * menu titled "Edit" the moment the menu bar is installed, so an app's own
+ * Edit item is inserted after the standard item it follows rather than
+ * appended - appending would land it below the system's. */
+static long twin_index_after(ns_menu *menu, const char *title) {
+  long found = twin_index_of(menu, title);
+  return found < 0 ? ns_menu_number_of_items(menu) : found + 1;
+}
+
+/* AppKit sends the standard View item's toggleSidebar: down the responder
+ * chain, so nothing in this twin hears a sidebar toggle. The Swift twin
+ * rewrites its report from viewDidLayout on every layout pass; Syntonic wraps
+ * no layout callback, so the item is retargeted here instead and this is where
+ * the toggle refreshes the report (R22). The toolbar's own toggle item still
+ * goes through the chain and does not. */
+static void twin_toggle_sidebar(void *context, const void *sender) {
+  (void)sender;
+  twin *t = context;
+  ns_split_view_controller_toggle_sidebar(t->split_controller);
+  twin_write_layout_report(t);
 }
 
 /* The menu bar is kept because Syntonic has no getter for the application's
@@ -1166,6 +1194,13 @@ static void twin_install_menu_bar(twin *t, ns_application *application) {
   ns_menu_item_set_action(find, twin_begin_search, t);
   ns_menu_insert_item_at_index(edit_menu, find, after_select_all + 1);
   ns_release(find);
+
+  ns_menu *view_menu = twin_submenu_at(menu_bar, 3);
+  long toggle = twin_index_of(view_menu, "Toggle Sidebar");
+  if (toggle >= 0) {
+    ns_menu_item_set_action(ns_menu_item_at_index(view_menu, toggle),
+                            twin_toggle_sidebar, t);
+  }
 }
 
 /* MARK: - Application callbacks (twins/swift/AppDelegate.swift) */

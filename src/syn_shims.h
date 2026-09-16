@@ -214,6 +214,8 @@ void syn_shim_report_count(const syn_shim_table *table, const char *member,
                            long count);
 void syn_shim_report_null(const syn_shim_table *table, const char *member,
                           const void *value);
+void syn_shim_report_utf8(const syn_shim_table *table, const char *member,
+                          const char *utf8);
 void syn_shim_report_handle(const syn_shim_table *table, const char *member,
                             const void *handle, Class expected, bool required);
 
@@ -229,6 +231,12 @@ void syn_shim_report_handle(const syn_shim_table *table, const char *member,
 #define SYN_SHIM_CHECK_NONNULL(table, member, value)                          \
   syn_shim_report_null(&(table), #member, (const void *)(value))
 
+/* A string a callback returned is valid UTF-8, which is the same rule a string
+ * at a wrapper parameter is held to (R11). Null passes: whether null is an
+ * answer or a fault is SYN_SHIM_CHECK_NONNULL's question, not this one's. */
+#define SYN_SHIM_CHECK_UTF8(table, member, utf8)                              \
+  syn_shim_report_utf8(&(table), #member, (utf8))
+
 /* A handle a callback returned is non-null where the SDK says non-null, and is
  * the expected class or a subclass of it (R12). */
 #define SYN_SHIM_CHECK_HANDLE(table, member, handle, cls, required)           \
@@ -239,6 +247,7 @@ void syn_shim_report_handle(const syn_shim_table *table, const char *member,
 
 #define SYN_SHIM_CHECK_COUNT(table, member, count) ((void)0)
 #define SYN_SHIM_CHECK_NONNULL(table, member, value) ((void)0)
+#define SYN_SHIM_CHECK_UTF8(table, member, utf8) ((void)0)
 #define SYN_SHIM_CHECK_HANDLE(table, member, handle, cls, required) ((void)0)
 
 #endif /* NDEBUG */

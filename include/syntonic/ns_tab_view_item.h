@@ -46,7 +46,7 @@ void ns_tab_view_item_set_label(ns_tab_view_item *_Nonnull tab_view_item,
 
 /* -[NSTabViewItem label] - `label` is a copy property, so this is an owned
  * copy the caller frees with ns_string_free (R7, R11). */
-char *_Nullable ns_tab_view_item_copy_label(
+char *_Nonnull ns_tab_view_item_copy_label(
     ns_tab_view_item *_Nonnull tab_view_item) API_AVAILABLE(macos(26.0));
 
 /* -[NSTabViewItem setImage:] - the item retains the image, so releasing your

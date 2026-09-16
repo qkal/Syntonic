@@ -10,6 +10,11 @@
  * outline view. The cache survives a reload and survives replacing the
  * callbacks struct, which is exactly what makes an expanded group stay
  * expanded. Neither the box nor the cache retains the outline view (KTD8).
+ *
+ * The cache never evicts on its own, because it cannot tell a freed node from
+ * a live one: an address is permanent identity here, and
+ * ns_outline_view_forget_item is what the caller drops one with before freeing
+ * the node or handing its address to another.
  */
 
 #import <AppKit/AppKit.h>
@@ -177,6 +182,7 @@ SYN_SHIM_TABLE(syn_outline_view_table, ns_outline_view_callbacks,
   const char *text = callback(syn_context, NS_OUT(ns_outline_view, syn_sender),
                               syn_outline_pointer(item));
   SYN_SHIM_CHECK_NONNULL(syn_outline_view_table, cell_string, text);
+  SYN_SHIM_CHECK_UTF8(syn_outline_view_table, cell_string, text);
 
   /* Null is an answer here, not a report: a row with no icon - a group
    * heading - is what the member says so with. */
@@ -187,6 +193,7 @@ SYN_SHIM_TABLE(syn_outline_view_table, ns_outline_view_callbacks,
           ? symbol_callback(syn_context, NS_OUT(ns_outline_view, syn_sender),
                             syn_outline_pointer(item))
           : NULL;
+  SYN_SHIM_CHECK_UTF8(syn_outline_view_table, cell_symbol_name, symbol);
   return syn_cell_view(outlineView, tableColumn, text, symbol);
   SYN_SHIM_LEAVE();
 }
@@ -362,6 +369,18 @@ void ns_outline_view_scroll_item_to_visible(ns_outline_view *outline_view,
   NSInteger row = [target rowForItem:syn_outline_box(target, item)];
   if (row < 0) return;
   [target scrollRowToVisible:row];
+  NS_LEAVE();
+}
+
+/* The one way out of the cache: the next sight of `item` boxes it afresh, so
+ * AppKit sees a new row identity and none of the old one's state. */
+void ns_outline_view_forget_item(ns_outline_view *outline_view,
+                                 const void *item) {
+  NS_ENTER();
+  NSOutlineView *target = NS_IN(NSOutlineView, outline_view);
+  if (item != NULL)
+    [syn_outline_items(target)
+        removeObjectForKey:[NSValue valueWithPointer:item]];
   NS_LEAVE();
 }
 

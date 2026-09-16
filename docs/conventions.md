@@ -263,6 +263,7 @@ nobody invents a second spelling.
 | `ns_<class>_set_callbacks(handle, callbacks, context)` | the protocol-struct installer |
 | `ns_<type>_as_<ancestor>` | an upcast |
 | struct members with no AppKit counterpart, such as `cell_string` | see [Callbacks](#callbacks) |
+| `ns_outline_view_forget_item` | drops the wrapper's box for one outline item, so its address may be freed or reused |
 | `ns_outline_view_selected_item`, `ns_outline_view_select_item`, `ns_outline_view_scroll_item_to_visible` | the three two-selector compositions an outline item needs, because AppKit addresses an outline by row (`rowForItem:` and then `selectRowIndexes:…`, `scrollRowToVisible:` or `itemAtRow:`) and a Syntonic item is a pointer. Each names both selectors in its comment |
 
 ---
@@ -711,12 +712,15 @@ AppKit, and reports the protocol, the member and the value on failure
 - null from a member that never returns null — a cell's borrowed string, an
   outline's child item; neither is an object handle, so neither is checked as
   one,
-- a handle whose class is not the expected class or a subclass.
+- a handle whose class is not the expected class or a subclass,
+- a returned string that is not valid UTF-8 — the same rule a string at a
+  wrapper parameter is held to, so malformed bytes are reported rather than
+  becoming an empty cell.
 
-`SYN_SHIM_CHECK_COUNT`, `SYN_SHIM_CHECK_NONNULL` and `SYN_SHIM_CHECK_HANDLE`
-are the three checks, written in the shim method between the callback's return
-and AppKit's — see
-[How a wrapper installs one](#how-a-wrapper-installs-one), piece 4. All three
+`SYN_SHIM_CHECK_COUNT`, `SYN_SHIM_CHECK_NONNULL`, `SYN_SHIM_CHECK_HANDLE` and
+`SYN_SHIM_CHECK_UTF8` are the four checks, written in the shim method between
+the callback's return and AppKit's — see
+[How a wrapper installs one](#how-a-wrapper-installs-one), piece 4. All four
 are nothing under `NDEBUG`.
 
 ---
@@ -890,6 +894,8 @@ obliges every other pointer in it to carry one.
 | null at a `_Nonnull` handle position | `NS_IN` | the expected AppKit class and the function |
 | a handle whose class is neither the expected class nor a subclass | `NS_IN`, `NS_IN_OPT` | both class names and the function |
 | null or invalid UTF-8 at a `_Nonnull` string position | `NS_STRING_IN` | the function and the UTF-8 rule |
+| a negative count, or a null array at a positive count, for an array in | `NS_STRING_ARRAY_IN`, `NS_VIEW_ARRAY_IN` | the function, the count and the array rule |
+| null at a `_Nonnull` function-pointer position | `NS_CHECK_CALLBACK` | the function and the non-null rule |
 | an Objective-C exception raised by AppKit inside the call | `NS_ENTER()` / `NS_LEAVE()` | the function, the exception's name and its reason |
 
 Each one prints to stderr and then **aborts**. Aborting is the point: a
