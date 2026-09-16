@@ -9,6 +9,7 @@ build_dir := "build"
 san_dir := "build-san"
 twin_name := "Syntonic Twin"
 swift_twin_dir := "build/twin-swift"
+c_twin_dir := "build/twin-c"
 macos_floor := "26.0"
 swift_twin_sources := "twins/swift/main.swift twins/swift/AppDelegate.swift twins/swift/MainWindowController.swift twins/swift/SidebarViewController.swift twins/swift/ListDetailViewController.swift twins/swift/SettingsViewController.swift twins/swift/SeedData.swift"
 
@@ -78,14 +79,58 @@ twin-swift-san:
 capture-swift appearance="light": twin-swift-build
     ./scripts/capture-states.sh swift {{appearance}}
 
+# Same app name and icon set as the Swift twin, so nothing on screen tells the
+# two apart; only the bundle id differs, and nothing shows it.
+# Compile and bundle the C twin.
+twin-c-build: lint-twin-c build
+    mkdir -p {{c_twin_dir}}
+    SYNTONIC_BUNDLE_DIR={{c_twin_dir}} ./scripts/bundle.sh {{build_dir}}/twin_c "{{twin_name}}" dev.kaino.syntonic.twin.c twins/shared/icon
+    codesign --verify --strict "{{c_twin_dir}}/{{twin_name}}.app"
+
 # Build, sign and launch the C twin.
-twin-c:
-    @echo "just twin-c: not built yet - unit U12 adds the C twin under twins/c." >&2; exit 1
+twin-c: twin-c-build
+    open "{{c_twin_dir}}/{{twin_name}}.app"
 
+# No AppKit header, no Foundation header, no Objective-C runtime call.
+# The C twin is written against Syntonic and nothing else (AE7).
+lint-twin-c:
+    @if grep -nE '#[[:space:]]*include[[:space:]]*[<"](objc|Foundation|AppKit|Cocoa)/' twins/c/*.c twins/c/*.h; then echo "lint-twin-c: the C twin may include syntonic.h and the C standard headers only." >&2; exit 1; fi
+    @if grep -nE 'objc_msgSend|objc_getClass|objc_lookUpClass|sel_registerName|sel_getUid|@selector' twins/c/*.c twins/c/*.h; then echo "lint-twin-c: the C twin may not call the Objective-C runtime." >&2; exit 1; fi
+
+# Every wrapper is ARC Objective-C against the SDK's own API.
+# No wrapper reaches for the Objective-C runtime by hand (R3).
+lint-no-runtime:
+    @if grep -nE 'objc_msgSend|objc_getClass|objc_lookUpClass|sel_registerName|sel_getUid' src/*.m include/syntonic/*.h; then echo "lint-no-runtime: a wrapper calls the Objective-C runtime by hand." >&2; exit 1; fi
+
+# Needs the Screen Recording and Accessibility grants; without them
+# capture-states.sh stops with a named message instead of writing black images.
 # Capture both twins in every state and both appearances for the blind comparison.
-compare:
-    @echo "just compare: not built yet - unit U12 adds the twin comparison harness." >&2; exit 1
+compare: twin-swift-build twin-c-build
+    ./scripts/capture-states.sh swift light
+    ./scripts/capture-states.sh swift dark
+    ./scripts/capture-states.sh c light
+    ./scripts/capture-states.sh c dark
+    @echo "compare: 40 states per twin in {{build_dir}}/compare. Shuffle, score and record the result in docs/twin-comparison.md section 10."
 
-# Compare the accessibility role and label trees of the two twins.
-ax-compare:
-    @echo "just ax-compare: not built yet - unit U12 adds the accessibility comparison." >&2; exit 1
+# Compare the accessibility role and label trees of the two twins (R23).
+ax-compare: twin-swift-build twin-c-build
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="{{build_dir}}/compare/ax"
+    mkdir -p "$out"
+    for twin in swift c; do
+      app="{{build_dir}}/twin-$twin/{{twin_name}}.app"
+      exe=$(plutil -extract CFBundleExecutable raw "$app/Contents/Info.plist")
+      open -n "$app"
+      for _ in $(seq 100); do
+        pid=$(pgrep -n -x "$exe" || true)
+        [[ -n "${pid:-}" ]] && break
+        sleep 0.1
+      done
+      [[ -n "${pid:-}" ]] || { echo "ax-compare: $twin never appeared in the process list." >&2; exit 1; }
+      status=0
+      {{build_dir}}/axdump "$pid" > "$out/$twin.txt" || status=$?
+      kill "$pid" 2>/dev/null || true
+      [[ $status -eq 0 ]] || { echo "ax-compare: axdump could not read the $twin twin; see the message above." >&2; exit 1; }
+    done
+    diff -u "$out/swift.txt" "$out/c.txt" && echo "ax-compare: the two trees match."

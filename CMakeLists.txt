@@ -63,6 +63,22 @@ if(PROJECT_IS_TOP_LEVEL)
   add_executable(hello_window "${CMAKE_CURRENT_SOURCE_DIR}/examples/hello_window.c")
   target_link_libraries(hello_window PRIVATE syntonic syntonic_flags)
 
+  # The C twin (U12). It is a consumer: it sees the public headers and its own
+  # seed data, and nothing else. `just twin-c` bundles it under the same app
+  # name and icon set as the Swift twin so the comparison stays blind.
+  add_executable(twin_c "${CMAKE_CURRENT_SOURCE_DIR}/twins/c/main.c")
+  target_link_libraries(twin_c PRIVATE syntonic syntonic_flags)
+  # A .dSYM beside the binary is what turns a `leaks` backtrace into file and
+  # line (KTD12).
+  add_custom_command(TARGET twin_c POST_BUILD
+    COMMAND dsymutil $<TARGET_FILE:twin_c>)
+
+  # tools/axdump.m reads a running app's accessibility tree (R23). It is a
+  # tool, not a wrapper, so it talks to ApplicationServices directly.
+  add_executable(axdump "${CMAKE_CURRENT_SOURCE_DIR}/tools/axdump.m")
+  target_link_libraries(axdump PRIVATE syntonic_flags
+    "-framework ApplicationServices" "-framework AppKit")
+
   enable_testing()
 
   # The runner and the AppKit bootstrap the suites are written against (U3).

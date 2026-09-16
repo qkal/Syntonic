@@ -212,7 +212,76 @@ so the friction is visible:
 
 A sugar header that shortens the common paths is planned and deliberately not in
 v0; the friction is being recorded first, so it shortens the paths people
-actually hit.
+actually hit. The list below is that record.
+
+## The sugar backlog
+
+Measured, not guessed: `twins/c/main.c` is the same sidebar-toolbar-list-detail
+app as `twins/swift/`, written statement for statement against these headers, so
+every place C needs more than one call per Swift statement is countable. The C
+twin is 1273 lines plus 95 of seed data against the Swift twin's 1028 across
+seven files — about 1.3x, and this is where the difference goes.
+
+**Twelve frictions, by cost.**
+
+1. **Upcasts — 79 calls.** Every operation on an inherited member goes through
+   one. `titleField.isEnabled = false` becomes
+   `ns_control_set_enabled(ns_text_field_as_control(field), false)`. The busiest
+   are `ns_text_field_as_view` (17), `ns_button_as_view` (14) and
+   `ns_text_field_as_control` (12). Sugar: a generic upcast, or duplicated
+   convenience setters on the subclass.
+2. **Ownership — 49 `create_` calls, 49 `ns_release`, 9 `ns_string_free`.**
+   Swift writes none of them. Sugar: a scope-bound owner, or constructors that
+   hand the reference to the parent in the same call.
+3. **Reading a string is four statements, not one.** `sender.stringValue`
+   becomes a `char *`, a `copy_`, a null check, a copy into the model and a
+   free — five times in the twin. Sugar: a borrowed-string read for the common
+   "compare it or copy it now" case.
+4. **A grid row is four calls.**
+   `grid.addRow(with: [NSTextField(labelWithString: "Title:"), field])` becomes
+   create the label, build an `ns_view *[2]`, add the row, release the label.
+   The twin factored it into two helpers used 11 times. Sugar: a form-row call
+   that takes a label string and a view.
+5. **A callback's `sender` is `const void *`.** Swift's `sender === titleField`
+   needs a cast in C, which is the only way one callback serves two fields.
+   Sugar: type the sender per callback member.
+6. **`ns_retain` returns `const void *`.** Keeping a handle past its owner costs
+   a cast back: `(ns_search_toolbar_item *)ns_retain(item)`. Sugar: a typed
+   retain, or a macro that preserves the argument's type.
+7. **A handle cannot say what class it is.** The twin's key-view walk can name
+   its own views and nothing else. Sugar: a class-name read, for diagnostics
+   only.
+8. **A pop-up's selection back into the model is eight lines.**
+   `item.category = sender.titleOfSelectedItem ?? categories[0]` becomes copy
+   the title, loop the fixed list to re-point at a stable string, free. Sugar:
+   selection by index against the array the caller added.
+9. **Enum state instead of Bool.** `checkbox.state == .on` becomes
+   `ns_button_state(b) == NS_CONTROL_STATE_VALUE_ON`, and setting it needs a
+   ternary. Sugar: a bool accessor beside the enum one.
+10. **Model identity.** Swift's `Item` is a class, so a filtered list holds
+    references. A C array moves on `realloc`, so the twin filters to indices and
+    every "the selected item" is a lookup through them. Not a library problem —
+    but sugar that hands rows back by pointer would make it one.
+11. **Missing wrappers the twin had to work around.** Each cost extra code:
+    - no `NSApp.mainMenu` getter, so the app keeps what
+      `ns_menu_bar_install_standard` returned;
+    - no index or handle for a standard menu item, so inserting `Find` after
+      `Select All` needs a 12-line title scan — AppKit has already appended
+      AutoFill, Dictation and Emoji to the Edit menu by then, and appending
+      lands below them;
+    - no `reloadData(forRowIndexes:columnIndexes:)`, so a commit reloads the
+      whole table and saves and restores the selection around it;
+    - no `NSWindow.setFrame(_:display:)`, only content size and frame origin.
+12. **Missing wrappers the twin could not work around.** These are gaps, not
+    friction:
+    - **`NSAppearance`** is not wrapped, so a C app cannot pin light or dark
+      the way `NSApp.appearance` does;
+    - **`applicationShouldHandleReopen(_:hasVisibleWindows:)`** is not a member
+      of `ns_application_callbacks`, so a C app cannot bring its window back
+      when its Dock icon is clicked;
+    - **`NSViewController` has no callbacks**, so nothing observes
+      `viewDidLayout` — a C app cannot react to a layout pass it did not cause,
+      which is how the twin would notice its sidebar collapsing.
 
 ## Status
 
@@ -221,9 +290,16 @@ lint tooling is in place, the conventions are written, and the first wrappers �
 `NSApplication`, `NSWindow`, `NSViewController` and the shared kernel — are
 done. Nothing is packaged: you consume the source.
 
-Next: views and layout, controls, the toolbar, the sidebar and outline view, the
-menu bar, and a twin app built twice, once in Swift and once in C, to hold the C
-one to the Swift one's quality.
+Views and layout, controls, the toolbar, the sidebar and outline view and the
+menu bar are wrapped, and the twin app is built twice — `twins/swift/` and
+`twins/c/` — which is what holds the C one to the Swift one's quality. The two
+agree line for line on every layout report, menu, toolbar and key-view dump
+they produce; `docs/twin-comparison.md` records what has been compared and what
+is still waiting on a machine with the screen-capture grants.
+
+Next: the sugar header above, and the three wrappers the twin could not do
+without — `NSAppearance`, the application delegate's reopen callback, and
+view-controller callbacks.
 
 Deferred, and named as deferred: a header generator, the sugar header, sheets,
 drag and drop, menu bar extras, popovers, custom-drawn views, document-based

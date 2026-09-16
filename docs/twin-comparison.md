@@ -61,6 +61,14 @@ reproducible and both appearances can be captured back to back. The system
 accent color is visible in the sidebar icons and the selection; capture both
 twins in the same session so it cannot drift between them.
 
+**Only the Swift twin can honour that variable today.** Syntonic wraps no
+`NSAppearance`, so the C twin follows the system theme whatever the variable
+says, and a dark-appearance pair would put a pinned-dark Swift capture beside a
+system-themed C one — a tell that has nothing to do with the wrappers. Until
+`NSAppearance` is wrapped, the dark half of the set is captured by setting the
+*system* theme to dark for that half of the session and leaving the variable
+unset, so both twins follow the same appearance.
+
 ## 4. Capture
 
 ```sh
@@ -90,7 +98,7 @@ whenever it shows a window.
 **Settling is a handshake, never a sleep.** Each twin writes a layout report to
 `$SYNTONIC_TWIN_DUMP` after every layout pass, window move, window resize,
 selection change and edit. Before each capture the script waits for the line
-that proves the state has arrived — `sidebar.width=0.0`, `list.rows=13`,
+that proves the state has arrived — `sidebar.collapsed=true`, `list.rows=13`,
 `detail.title.value=…` — and fails with `SYNTONIC_CAPTURE_TIMEOUT` after ten
 seconds. A fixed sleep would photograph animations mid-flight and add timing
 noise to a blind comparison.
@@ -194,14 +202,25 @@ single mismatch fails the comparison whatever the images score.
 
 **Tab order** — without a nib AppKit rebuilds the key view loop in geometric
 order, so both twins set `autorecalculatesKeyViewLoop` to false and chain it by
-hand:
+hand. What the flag actually buys is less than its name suggests, and U12
+measured it on both twins:
 
 - Main window: sidebar outline → table → Title → Owner → Category → Flagged →
   Delete → sidebar outline. The toolbar's search field is outside the loop and
-  is reached with ⌘F.
-- Settings ▸ General: Workspace → Opens with → Reopen checkbox → Workspace.
-- Settings ▸ Appearance: Theme → Row height → Badge checkbox → Theme.
-- Settings ▸ Advanced: Scratch folder → Log checkbox → Reset → Scratch folder.
+  is reached with ⌘F. **Measured, and both twins agree**: the chain is built
+  after `makeKeyAndOrderFront:`, nothing rebuilds it afterwards, and walking
+  `nextKeyView` from the window's initial first responder gives exactly this
+  cycle on both.
+- Settings ▸ General, Appearance and Advanced chain their three controls in
+  construction order — **and neither twin keeps that chain.** Each pane chains
+  in `loadView`, before the window is ever shown; showing the window rebuilds
+  the loop with `autorecalculatesKeyViewLoop` set to false, and every control's
+  `nextKeyView` ends up pointing at an `_NSCoreHostingView<…>`, one of AppKit's
+  own hosting views. The flag does not hold a chain across a rebuild on macOS
+  27; `include/syntonic/ns_window.h` records the same measurement. Both twins
+  are replaced identically, so this is not a comparison risk — but the Settings
+  Tab order is AppKit's, not the twins', and a comparison must not record it as
+  matching the list above.
 
 ## 8. Blind procedure
 
@@ -243,3 +262,105 @@ priority.
 When the comparison fails, the failing states name the defect: the state list,
 the layout report and the behavior lines together say whether the fault is a
 missing wrapper, a wrong default or a layout priority.
+
+## 10. Results
+
+Run on 2026-09-16 against `feat/appkit-c-core-v0` at `bbafada` plus U12, on the
+reference machine of section 1. **Acceptance is Kal's to judge; this section is
+what the executor produced.**
+
+### 10.1 Blocked: the blind comparison and the accessibility diff
+
+**Neither TCC grant exists on this machine, so there are no captures and no
+blind result.** Both paths were built, run, and stopped where they should:
+
+| Command | Result |
+| --- | --- |
+| `just compare` | `SYNTONIC_CAPTURE_NO_ACCESSIBILITY` — System Events may not drive the UI |
+| `screencapture -x -D 1` | `could not create image from display` — no Screen Recording grant |
+| `just ax-compare` | `SYNTONIC_AX_NOT_TRUSTED` — `AXIsProcessTrusted()` is false |
+
+`tools/axdump.m` cannot fall back to reading the twin's own process either: a
+scratch program that created a window and then asked for its own
+`kAXWindowsAttribute` got `kAXErrorAPIDisabled` (-25208). Without the
+Accessibility grant **no accessibility tree can be read at all**, in any
+process, so R23 is unverified rather than partly verified.
+
+No image was fabricated and no blind score is recorded. Sections 8 and 9 are
+unchanged and are what a run with the grants follows; grant Accessibility and
+Screen Recording to the shell's host app in System Settings ▸ Privacy &
+Security, then `just compare` and `just ax-compare`.
+
+### 10.2 What was verified instead: the layout-report diff
+
+Both twins were driven through the state list by a pair of scratch drivers that
+call the same actions the UI is wired to — the split view item's collapse, the
+search field's action, the table's selection, the detail controls' actions and
+`performClick`, the toolbar's Add — and file the same reports at the same
+points. The C driver includes `twins/c/main.c` and reaches the twin only
+through Syntonic; the Swift driver replaces `twins/swift/main.swift` and
+reaches the twin through AppKit.
+
+**Sixteen files per twin, byte-identical, twice in a row:**
+
+| File | What it holds |
+| --- | --- |
+| `01-launch` … `12-collection-syntonic``.layout.txt` | the full layout report at twelve states |
+| `menu.txt` | every menu, item title, key equivalent, modifier mask and separator, recursively |
+| `toolbar.txt` | the toolbar's five item identifiers and labels in order, its display mode, the window's toolbar style |
+| `keys.txt` | the main window's key view loop, walked ten hops from the initial first responder |
+| `settings.txt` | the Settings window frame, its three tab labels, each pane's grid frame, and each pane's key chain |
+
+`diff -ru` over the two directories is empty, and a second run of both drivers
+reproduces both directories exactly. That covers every frame, intrinsic size,
+hugging priority and compression-resistance priority section 4 asks for, at a
+tolerance of zero rather than the 0.5 points section 9 allows.
+
+Two states were driven but are **not** what the capture protocol reaches by the
+same route:
+
+- **`10-window-resized`** sets the *content* size to 820 × 520; section 5
+  resizes the *frame*. Syntonic wraps `setContentSize:` and `setFrameOrigin:`
+  but not `setFrame:display:`, so a C app cannot set a frame size from inside.
+  The capture script resizes from outside through the accessibility API, which
+  reaches both twins the same way.
+- **Settings** reports a 500 × 588 frame at (420, 361) on both twins, not the
+  520 × 300 at (420, 420) section 3 states: `NSTabViewController` in the
+  toolbar style sizes the window to its panes. Both twins agree exactly, so it
+  is section 3 that is optimistic, not either twin.
+
+Collapsing the sidebar leaves `sidebar.width` at 220.0 on **both** twins —
+AppKit hides the sidebar's view rather than zeroing its frame — so the wait in
+`scripts/capture-states.sh` for `sidebar.width=0.0` could never have matched.
+It now waits for `sidebar.collapsed=true`, which is the line that moves.
+
+### 10.3 The behavior list, walked
+
+Twenty-four lines: the six transitions of section 6 and the eighteen bullets of
+section 7. **Sixteen verified by driving both twins and diffing, six verified
+structurally, one cannot be verified without a UI, one is a known mismatch.**
+
+| Line | How |
+| --- | --- |
+| Transitions 1, 3, 4, 5, 6 | driven; states 06, 11, 09, 08 and the window close agree exactly |
+| Transition 2 (edit commits at end of editing) | driven through the field's action; Return, Tab and click-away are AppKit's own end-of-editing triggers and need a UI |
+| R16 toolbar order, style, symbol | `toolbar.txt` identical: toggle sidebar, tracking separator, Add, flexible space, search, icon-only, unified |
+| R16 Add inserts and selects | driven through the toolbar item's own action |
+| R16 search filters as characters arrive | driven; `sendsSearchStringImmediately` is set identically on both, per-keystroke arrival needs a UI |
+| R17, all six | driven; states 05–11 and the 820 × 520 state agree, field column 220.0 on both |
+| R18 Edit items are responder-chain actions | structural: the standard menu bar gives them nil targets by construction, and `menu.txt` is identical. The keystrokes need a UI |
+| R18 AppKit appends AutoFill, Dictation, Emoji | `menu.txt` shows all three on both twins, in the same place |
+| R18 key equivalents (⌘, ⌘W ⌘Q ⌃⌘S ⌘F ⌘N) | `menu.txt` matches on every title, key equivalent and modifier mask |
+| F1 closing the last window | driven; both report `windowVisible=false` and keep running |
+| **F1 reopening from the Dock** | **mismatch.** `ns_application_callbacks` has no `applicationShouldHandleReopen:hasVisibleWindows:` member, so the C twin does not bring its window back and the Swift twin does |
+| Tab order, main window | `keys.txt` identical; see section 7 |
+| Tab order, three Settings panes | measured: neither twin keeps its chain; see section 7 |
+
+The C twin walked all twelve states **under AddressSanitizer and
+UndefinedBehaviorSanitizer with no report**, and under `leaks -atExit` with 415
+framework-baseline leaks and **0 attributed to the twin's own frames**.
+
+### 10.4 What fails the comparison today
+
+One behavior line: the Dock reopen. It needs a wrapper, not a twin change.
+Everything else either matches exactly or is waiting on the two TCC grants.

@@ -224,11 +224,15 @@ front
 capture_window launch
 
 # sidebar collapsed / expanded
+# Collapsing hides the sidebar's view rather than zeroing its frame, so both
+# twins still report sidebar.width=220.0 here; the collapsed flag is the line
+# that moves, and list.frame sliding to x=0 is what the capture shows.
 shortcut s "command down, control down"
-wait_for "^sidebar\.width=0\.0$" "the sidebar never collapsed"
+wait_for "^sidebar\.collapsed=true$" "the sidebar never collapsed"
 capture_window sidebar-collapsed
 shortcut s "command down, control down"
-wait_for "^sidebar\.width=$sidebar_w$" "the sidebar never came back"
+wait_for "^sidebar\.collapsed=false$" "the sidebar never came back"
+wait_for "^sidebar\.width=$sidebar_w$" "the sidebar never came back to its width"
 capture_window sidebar-expanded
 
 # search filtering
