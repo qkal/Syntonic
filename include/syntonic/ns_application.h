@@ -17,6 +17,7 @@
 
 #include <os/availability.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 #include <syntonic/ns_base.h>
 
@@ -26,6 +27,17 @@ extern "C" {
 
 /* The handle. One opaque struct type per AppKit class (R4, KTD9). */
 typedef struct ns_application ns_application;
+
+/* NSApplicationActivationPolicy, whether the application appears in the Dock
+ * and owns a menu bar. It belongs to NSRunningApplication.h, which v0 does not
+ * wrap, and the application is the only place it is needed - so it is declared
+ * here, where it is used. An executable with no bundle starts prohibited,
+ * which is why a bare C twin has to ask for regular. */
+typedef enum ns_application_activation_policy : int64_t {
+  NS_APPLICATION_ACTIVATION_POLICY_REGULAR = 0,
+  NS_APPLICATION_ACTIVATION_POLICY_ACCESSORY = 1,
+  NS_APPLICATION_ACTIVATION_POLICY_PROHIBITED = 2,
+} ns_application_activation_policy;
 
 /*
  * NSApplicationDelegate, as a struct of function pointers. Every member is
@@ -66,6 +78,14 @@ void ns_application_run(ns_application *_Nonnull application)
  * activation API; activateIgnoringOtherApps: is deprecated (KTD16). */
 void ns_application_activate(ns_application *_Nonnull application)
     API_AVAILABLE(macos(26.0));
+
+/* -[NSApplication setActivationPolicy:] - true when the policy was taken. An
+ * executable that is not in a bundle starts prohibited, with no Dock icon and
+ * no menu bar, so a program built as a bare binary asks for
+ * NS_APPLICATION_ACTIVATION_POLICY_REGULAR before it runs. */
+bool ns_application_set_activation_policy(
+    ns_application *_Nonnull application,
+    ns_application_activation_policy policy) API_AVAILABLE(macos(26.0));
 
 /* -[NSApplication terminate:] - AppKit's sender argument is an `id` and never
  * crosses the boundary (R11), so the library passes nil. */

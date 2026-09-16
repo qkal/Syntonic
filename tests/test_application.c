@@ -74,6 +74,29 @@ SYN_TEST(activating_the_application_is_the_api_that_is_not_deprecated) {
   SYN_ASSERT(syn_test_activation_policy_is_prohibited());
 }
 
+/* U7's rider: a bare executable starts prohibited, with no Dock icon and no
+ * menu bar, so a program that wants either has to ask. The regular policy is
+ * the one the twins set and the one this suite must not take - it would put a
+ * test process in the Dock - so what is pinned here is the round trip through
+ * the other two. */
+SYN_TEST(the_activation_policy_is_the_one_the_application_was_last_given) {
+  syn_test_bootstrap();
+  ns_application *application = ns_application_shared();
+  SYN_ASSERT_MSG(syn_test_activation_policy_is_prohibited(),
+                 "the bootstrap did not leave the suite prohibited");
+
+  SYN_ASSERT_MSG(ns_application_set_activation_policy(
+                     application, NS_APPLICATION_ACTIVATION_POLICY_ACCESSORY),
+                 "AppKit refused the accessory policy");
+  SYN_ASSERT_MSG(!syn_test_activation_policy_is_prohibited(),
+                 "the accessory policy did not take");
+
+  SYN_ASSERT(ns_application_set_activation_policy(
+      application, NS_APPLICATION_ACTIVATION_POLICY_PROHIBITED));
+  SYN_ASSERT_MSG(syn_test_activation_policy_is_prohibited(),
+                 "the suite did not go back off-screen");
+}
+
 SYN_TEST(a_struct_with_one_member_set_is_a_delegate_that_implements_one_method) {
   syn_test_bootstrap();
   syn_reset();

@@ -83,6 +83,16 @@ void ns_application_activate(ns_application *application) {
   NS_LEAVE();
 }
 
+/* AppKit answers whether it took the policy, so the wrapper hands that back
+ * rather than dropping it (R11). */
+bool ns_application_set_activation_policy(
+    ns_application *application, ns_application_activation_policy policy) {
+  NS_ENTER();
+  return [NS_IN(NSApplication, application)
+      setActivationPolicy:(NSApplicationActivationPolicy)policy];
+  NS_LEAVE();
+}
+
 void ns_application_terminate(ns_application *application) {
   NS_ENTER();
   [NS_IN(NSApplication, application) terminate:nil];

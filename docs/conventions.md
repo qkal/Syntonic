@@ -217,6 +217,17 @@ ns_view *_Nonnull ns_button_as_view(ns_button *_Nonnull button);
 An upcast has no AppKit selector, so its header comment carries the
 `syntonic-owned` tag (see [Header seams](#header-seams-and-header-discipline)).
 
+**Inherited API is reached through the upcast, never redeclared.** One C
+function per method or property means the function lives on the class the SDK
+declares it on, and the subclass reaches it by upcasting:
+`ns_control_set_action(ns_button_as_control(button), …)`,
+`ns_control_copy_string_value(ns_text_field_as_control(field), …)`. There is no
+`ns_button_set_action` and no `ns_text_field_copy_string_value`, because
+`NSButton.h` and `NSTextField.h` declare neither — `NSControl.h` does, and the
+mirror-header rule puts a function in the header whose SDK header declares it.
+A wrapper that wants an inherited property on hand declares the upcast, not a
+second spelling of the property.
+
 ### Syntonic-owned names
 
 Names with no AppKit counterpart keep the `ns_` prefix and are listed here so
@@ -687,7 +698,7 @@ required**, because every protocol v0 wraps is `@optional` in the SDK.
 |---|---|---|---|---|---|
 | `ns_application_callbacks` | `NSApplicationDelegate` | none | `did_finish_launching`, `should_terminate_after_last_window_closed`, `will_terminate` | — | U14 ✓ |
 | `ns_window_callbacks` | `NSWindowDelegate` | none | `will_close` | — | U14 ✓ |
-| `ns_text_field_callbacks` | `NSTextFieldDelegate` | none | `did_change`, `did_end_editing` | — | U7 |
+| `ns_text_field_callbacks` | `NSTextFieldDelegate` | none | `did_change`, `did_end_editing` | — | U7 ✓ |
 | `ns_table_view_callbacks` | `NSTableViewDataSource` + `NSTableViewDelegate` (merged) | `number_of_rows`, `cell_string` | `selection_did_change` | — | U8 |
 | `ns_outline_view_callbacks` | `NSOutlineViewDataSource` + `NSOutlineViewDelegate` (merged) | `number_of_children_of_item`, `child_of_item`, `is_item_expandable`, `cell_string` | `should_expand_item`, `selection_did_change` | — | U8 |
 | `ns_toolbar_callbacks` | `NSToolbarDelegate` | `item_for_item_identifier_will_be_inserted_into_toolbar` | — | `toolbarDefaultItemIdentifiers:`, `toolbarAllowedItemIdentifiers:` — the wrapper answers both from C string arrays passed by pointer plus count | U9 |
@@ -698,6 +709,15 @@ A ✓ in the unit column means the row was checked against the shipped struct.
 `cell_string` has no AppKit counterpart: it is the Syntonic-owned member that
 supplies one borrowed UTF-8 string per cell, which the wrapper copies into the
 cell view it built and reuses.
+
+**The text field's two members answer `NSControlTextEditingDelegate`
+selectors** — `controlTextDidChange:` and `controlTextDidEndEditing:`.
+`NSTextFieldDelegate` inherits that protocol, and the three methods it declares
+itself are candidate-list methods v0 does not wrap. `did_end_editing` is the
+commit point R17 asks for. The field's target/action,
+installed through `ns_control_set_action` on the control upcast, fires at the
+same moment and is what the twins use; the struct is the finer-grained view of
+the same event and the two are independent.
 
 **`should_terminate_after_last_window_closed` unset means false**, which is F1:
 closing the last window leaves the app running with its menu bar until Quit.
@@ -865,8 +885,29 @@ description as a parameter and the caller supplies it, exactly as a nib would
 have.
 
 `ns_view.h` exposes setters for a view's accessibility label and role, so a
-programmatically built app can name what a nib would have named. **Those setters
-land in U7**; until then there is no way to set one, and nothing needs one.
+programmatically built app can name what a nib would have named. They landed in
+U7 as four functions on `ns_view`: `ns_view_set_accessibility_label`,
+`ns_view_copy_accessibility_label`, `ns_view_set_accessibility_role` and
+`ns_view_copy_accessibility_role`. Every control reaches them through its view
+upcast, because both are `NSAccessibility` properties that `NSView` adopts.
+
+**A role crosses as a UTF-8 string, not as a named constant.** AppKit's roles
+are a typed `NSString` (`NSAccessibilityRole`), so the boundary rule for a
+string applies unchanged (R11) and the caller writes AppKit's own spelling:
+`"AXButton"`, `"AXPopUpButton"`, `"AXGroup"`. Syntonic declares no `extern
+const char *const` for them, because a C constant cannot be initialized from
+AppKit's `NSString` at load time and the alternative — a second, hand-copied
+table of Apple's role strings — is a spelling to keep in sync for no gain. A
+suite that needs one spells it in a `#define` of its own, as
+`tests/test_accessibility.c` does.
+
+**Both properties are `copy`, so the getters are owned** and named `copy_`
+(R7). Both are also latches, which is the reason the rule above is "never touch
+one unless asked" rather than "set a sensible default": a value the caller sets
+replaces AppKit's inference, and setting null afterwards replaces it with
+nothing rather than restoring the inference. `tests/test_accessibility.c` pins
+both halves — a titled button reporting its title with no call made, and a set
+label surviving a clear as null.
 
 ---
 
@@ -1090,7 +1131,7 @@ named section in its own commit; nothing else in the document moves.
 |---|---|
 | U14 ✓ | landed: the application and window rows of the per-protocol table, confirmed against the shipped structs; [How a wrapper installs one](#how-a-wrapper-installs-one), which is `src/syn_shims.h` as the six later units use it; `+[NSApplication sharedApplication]` on the [borrowed-return allowlist](#the-mechanical-rule-read-the-sdk-propertys-attribute); `NSWindow`'s `releasedWhenClosed` fixup confirmed. The view controller needed no row: NSViewController has no protocol Syntonic wraps |
 | U6 ✓ | landed: [The index check](#the-index-check) in [Misuse checks](#misuse-checks-and-exceptions), which is `NS_CHECK_INDEX` and where not to use it; the dropped-segment rule in [Constructors](#constructors), for a selector segment whose type cannot cross; [An enum from a header that is not wrapped](#an-enum-from-a-header-that-is-not-wrapped), for `ns_event_modifier_flags`; `-[NSMenu itemAtIndex:]` confirmed on the [borrowed-return allowlist](#the-mechanical-rule-read-the-sdk-propertys-attribute). No per-protocol row and no post-init fixup: v0 wraps no menu protocol, and neither `NSMenu` nor `NSMenuItem` needs a line after construction |
-| U7 | the accessibility setters in [Accessibility](#accessibility); the text-field row of the per-protocol table |
+| U7 ✓ | landed: the accessibility setters and the role-as-a-string decision in [Accessibility](#accessibility); the text-field row of the per-protocol table, confirmed against the shipped struct; the inherited-API-through-the-upcast rule in [Upcasts](#upcasts), which is why there is no `ns_button_set_action`. No post-init fixup: none of `NSView`, `NSControl`, `NSButton`, `NSTextField` or `NSPopUpButton` needs a line after construction |
 | U8 | the table and outline rows of the per-protocol table, confirmed against the shipped structs |
 | U9 | the toolbar row, including the dropped identifier methods |
 | U10 | anything the tab view controller needs that is not already here |
