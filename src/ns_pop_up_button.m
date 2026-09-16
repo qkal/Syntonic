@@ -33,13 +33,7 @@ void ns_pop_up_button_add_items_with_titles(ns_pop_up_button *pop_up_button,
                                             long count) {
   NS_ENTER();
   NSPopUpButton *target = NS_IN(NSPopUpButton, pop_up_button);
-  NSMutableArray<NSString *> *strings =
-      [NSMutableArray arrayWithCapacity:(NSUInteger)(count > 0 ? count : 0)];
-  for (long index = 0; index < count; index++) {
-    NSString *title = NS_STRING_IN(titles[index]);
-    [strings addObject:title != nil ? title : @""];
-  }
-  [target addItemsWithTitles:strings];
+  [target addItemsWithTitles:NS_STRING_ARRAY_IN(titles, count, @"")];
   NS_LEAVE();
 }
 

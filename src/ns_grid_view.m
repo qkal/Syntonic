@@ -27,14 +27,8 @@ ns_grid_view *ns_grid_view_create_with_views(const ns_grid_view_row *rows,
   NSMutableArray<NSArray<NSView *> *> *grid_rows =
       [NSMutableArray arrayWithCapacity:(NSUInteger)(row_count > 0 ? row_count
                                                                    : 0)];
-  for (long row = 0; row < row_count; row++) {
-    long count = rows[row].count;
-    NSMutableArray<NSView *> *views =
-        [NSMutableArray arrayWithCapacity:(NSUInteger)(count > 0 ? count : 0)];
-    for (long column = 0; column < count; column++)
-      [views addObject:NS_IN(NSView, rows[row].views[column])];
-    [grid_rows addObject:views];
-  }
+  for (long row = 0; row < row_count; row++)
+    [grid_rows addObject:NS_VIEW_ARRAY_IN(rows[row].views, rows[row].count)];
   return NS_OUT_OWNED(ns_grid_view, [NSGridView gridViewWithViews:grid_rows]);
   NS_LEAVE();
 }
@@ -56,10 +50,7 @@ ns_grid_row *ns_grid_view_add_row_with_views(ns_grid_view *grid_view,
                                              ns_view *const *views,
                                              long count) {
   NS_ENTER();
-  NSMutableArray<NSView *> *row =
-      [NSMutableArray arrayWithCapacity:(NSUInteger)(count > 0 ? count : 0)];
-  for (long index = 0; index < count; index++)
-    [row addObject:NS_IN(NSView, views[index])];
+  NSArray<NSView *> *row = NS_VIEW_ARRAY_IN(views, count);
   return NS_OUT(ns_grid_row,
                 [NS_IN(NSGridView, grid_view) addRowWithViews:row]);
   NS_LEAVE();

@@ -4,8 +4,8 @@
  * system font size to ask for them at (R17).
  *
  * This is deliberately a corner of NSFont, not the class: v0 has no font
- * descriptor, no weight or width axis, and no font panel. A caller that wants
- * a different face names it through AppKit's own API in a later unit.
+ * descriptor, no weight or width axis, and no font panel. Naming a different
+ * face is outside v0's surface.
  *
  * OWNERSHIP (R7). +[NSFont systemFontOfSize:] is a plain class method
  * returning an object, not an `instancetype` constructor and not a property,

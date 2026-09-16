@@ -249,13 +249,7 @@ void ns_combo_box_add_items_with_object_values(ns_combo_box *combo_box,
   NS_ENTER();
   NSComboBox *target = NS_IN(NSComboBox, combo_box);
   NS_CHECK_COMBO_BOX_MODE(target, false);
-  NSMutableArray<NSString *> *objects =
-      [NSMutableArray arrayWithCapacity:(NSUInteger)(count > 0 ? count : 0)];
-  for (long index = 0; index < count; index++) {
-    NSString *value = NS_STRING_IN(values[index]);
-    [objects addObject:value != nil ? value : @""];
-  }
-  [target addItemsWithObjectValues:objects];
+  [target addItemsWithObjectValues:NS_STRING_ARRAY_IN(values, count, @"")];
   NS_LEAVE();
 }
 

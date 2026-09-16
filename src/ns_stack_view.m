@@ -13,10 +13,7 @@
 ns_stack_view *ns_stack_view_create_with_views(ns_view *const *views,
                                                long count) {
   NS_ENTER();
-  NSMutableArray<NSView *> *arranged =
-      [NSMutableArray arrayWithCapacity:(NSUInteger)(count > 0 ? count : 0)];
-  for (long index = 0; index < count; index++)
-    [arranged addObject:NS_IN(NSView, views[index])];
+  NSArray<NSView *> *arranged = NS_VIEW_ARRAY_IN(views, count);
   return NS_OUT_OWNED(ns_stack_view, [NSStackView stackViewWithViews:arranged]);
   NS_LEAVE();
 }

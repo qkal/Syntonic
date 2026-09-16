@@ -28,9 +28,9 @@ extern "C" {
 /* The handle. One opaque struct type per AppKit class (R4, KTD9). */
 typedef struct ns_window ns_window;
 
-/* Declared by their own headers - ns_view_controller.h, and NSView's and
- * NSToolbar's in later units - and repeated here so this header stands alone.
- * C has allowed a repeated typedef of the same type since C11. */
+/* Declared by ns_view.h, ns_view_controller.h and ns_toolbar.h and repeated
+ * here so this header stands alone. C has allowed a repeated typedef of the
+ * same type since C11. */
 typedef struct ns_view ns_view;
 typedef struct ns_view_controller ns_view_controller;
 typedef struct ns_toolbar ns_toolbar;

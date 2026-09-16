@@ -116,8 +116,9 @@ static NSMenu *syn_menu_bar_edit_menu(void) {
 
 static NSMenu *syn_menu_bar_view_menu(void) {
   NSMenu *menu = [[NSMenu alloc] initWithTitle:@"View"];
-  /* The split view controller that answers this lands in U9; until then the
-   * chain simply has no responder for it and AppKit draws the item disabled. */
+  /* Any NSSplitViewController in the responder chain answers
+   * -[NSSplitViewController toggleSidebar:]; with none there the chain has no
+   * responder for it and AppKit draws the item disabled. */
   [menu addItem:syn_menu_bar_item_with_modifiers(
                     @"Toggle Sidebar", @selector(toggleSidebar:), @"s",
                     NSEventModifierFlagCommand | NSEventModifierFlagControl)];

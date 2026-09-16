@@ -17,6 +17,25 @@ static NSString *const syn_cell_view_identifier = @"syn.cell";
  * one are laid out differently and neither can turn into the other. */
 static NSString *const syn_icon_cell_view_suffix = @".syn.icon";
 
+/* The icon pool's identifier for a column's own identifier, composed once per
+ * column rather than once per cell: this runs for every visible row of every
+ * redraw, and AppKit's reuse is keyed on the exact string, so the same base
+ * has to keep yielding the same one. One entry per column identifier the
+ * process has drawn an icon cell for; AppKit calls back on the main thread
+ * only, so the table needs no lock. */
+static NSUserInterfaceItemIdentifier syn_icon_cell_view_identifier(
+    NSUserInterfaceItemIdentifier base) {
+  static NSMutableDictionary<NSUserInterfaceItemIdentifier,
+                             NSUserInterfaceItemIdentifier> *composed;
+  if (composed == nil) composed = [NSMutableDictionary dictionary];
+  NSUserInterfaceItemIdentifier identifier = composed[base];
+  if (identifier == nil) {
+    identifier = [base stringByAppendingString:syn_icon_cell_view_suffix];
+    composed[base] = identifier;
+  }
+  return identifier;
+}
+
 /* The gap between the icon and the label, and the two priorities that keep the
  * icon at its own width while the label takes the rest. The twins are compared
  * pixel by pixel, so these are the Swift sidebar's numbers, not new ones. */
@@ -88,8 +107,7 @@ NSTableCellView *syn_cell_view(NSTableView *table, NSTableColumn *column,
                                const char *utf8, const char *symbol) {
   NSUserInterfaceItemIdentifier identifier =
       column.identifier ?: syn_cell_view_identifier;
-  if (symbol != NULL)
-    identifier = [identifier stringByAppendingString:syn_icon_cell_view_suffix];
+  if (symbol != NULL) identifier = syn_icon_cell_view_identifier(identifier);
 
   NSView *reused = [table makeViewWithIdentifier:identifier owner:nil];
   NSTableCellView *cell = [reused isKindOfClass:[NSTableCellView class]]

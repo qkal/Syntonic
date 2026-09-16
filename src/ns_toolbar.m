@@ -166,12 +166,10 @@ void ns_toolbar_set_callbacks(ns_toolbar *toolbar,
   NSMutableArray<NSToolbarItemIdentifier> *defaults = nil;
   NSMutableArray<NSToolbarItemIdentifier> *allowed = nil;
   if (callbacks != NULL) {
-    defaults = [NSMutableArray array];
-    allowed = [NSMutableArray array];
-    for (long index = 0; index < default_item_identifier_count; index++)
-      [defaults addObject:NS_STRING_IN(default_item_identifiers[index])];
-    for (long index = 0; index < allowed_item_identifier_count; index++)
-      [allowed addObject:NS_STRING_IN(allowed_item_identifiers[index])];
+    defaults = NS_STRING_ARRAY_IN(default_item_identifiers,
+                                  default_item_identifier_count, nil);
+    allowed = NS_STRING_ARRAY_IN(allowed_item_identifiers,
+                                 allowed_item_identifier_count, nil);
   }
   objc_setAssociatedObject(target, &syn_toolbar_default_identifiers_key,
                            defaults, OBJC_ASSOCIATION_COPY_NONATOMIC);

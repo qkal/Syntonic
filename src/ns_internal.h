@@ -197,4 +197,51 @@ char *ns_internal_string_out(NSString *string);
 /* Outbound: always an owned copy (R11), never a pointer into the object. */
 #define NS_STRING_OUT(string) ns_internal_string_out(string)
 
+/* ---------------------------------------------------------------------------
+ * Arrays in (KTD17)
+ *
+ * An array in is a pointer plus a count, borrowed for the call: both macros
+ * convert element by element and yield a fresh NSArray, and neither keeps the
+ * C pointer. Each one evaluates `count` once and `values` or `handles` once
+ * per element.
+ *
+ * Macros rather than functions for the reason the checks above are macros:
+ * NS_IN and NS_STRING_IN name the calling function in their report, and a
+ * helper function would put its own name there instead.
+ * ------------------------------------------------------------------------- */
+
+/* Every string of `values`, each converted at a _Nonnull position. `fallback`
+ * stands in for an element the conversion could not make - null or invalid
+ * UTF-8, both of which NS_STRING_IN reports and stops for in a debug build, so
+ * only a release build reaches it. @"" keeps the array's length; nil leaves
+ * AppKit to raise on the hole. */
+#define NS_STRING_ARRAY_IN(values, count, fallback)                           \
+  ({                                                                          \
+    long ns_array_count_ = (count);                                           \
+    NSMutableArray<NSString *> *ns_array_ = [NSMutableArray                   \
+        arrayWithCapacity:(NSUInteger)(ns_array_count_ > 0 ? ns_array_count_  \
+                                                           : 0)];             \
+    for (long ns_array_index_ = 0; ns_array_index_ < ns_array_count_;         \
+         ns_array_index_++) {                                                 \
+      NSString *ns_array_string_ = NS_STRING_IN((values)[ns_array_index_]);   \
+      [ns_array_ addObject:ns_array_string_ != nil ? ns_array_string_         \
+                                                   : (fallback)];             \
+    }                                                                         \
+    ns_array_;                                                                \
+  })
+
+/* Every handle of `handles`, each checked at a _Nonnull position, as the
+ * NSViews behind them. */
+#define NS_VIEW_ARRAY_IN(handles, count)                                      \
+  ({                                                                          \
+    long ns_array_count_ = (count);                                           \
+    NSMutableArray<NSView *> *ns_array_ = [NSMutableArray                     \
+        arrayWithCapacity:(NSUInteger)(ns_array_count_ > 0 ? ns_array_count_  \
+                                                           : 0)];             \
+    for (long ns_array_index_ = 0; ns_array_index_ < ns_array_count_;         \
+         ns_array_index_++)                                                   \
+      [ns_array_ addObject:NS_IN(NSView, (handles)[ns_array_index_])];        \
+    ns_array_;                                                                \
+  })
+
 #endif /* SYNTONIC_SRC_NS_INTERNAL_H */

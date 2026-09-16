@@ -1,6 +1,6 @@
 /*
- * NSViewController (R1, R14). The base for the split and tab view controllers
- * later units add.
+ * NSViewController (R1, R14). The base the split and tab view controllers
+ * build on.
  */
 
 #import <AppKit/AppKit.h>

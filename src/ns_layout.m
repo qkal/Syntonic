@@ -13,12 +13,18 @@
 #include "ns_internal.h"
 #include "syntonic/ns_layout.h"
 
+/* The first two of the four steps above; both pins share them exactly, and
+ * only the constraints each one builds differ. */
+static void syn_layout_prepare(NSView *pinned, NSView *parent) {
+  pinned.translatesAutoresizingMaskIntoConstraints = NO;
+  [parent addSubview:pinned];
+}
+
 void ns_layout_pin_edges(ns_view *view, ns_view *container, CGFloat inset) {
   NS_ENTER();
   NSView *pinned = NS_IN(NSView, view);
   NSView *parent = NS_IN(NSView, container);
-  pinned.translatesAutoresizingMaskIntoConstraints = NO;
-  [parent addSubview:pinned];
+  syn_layout_prepare(pinned, parent);
   [NSLayoutConstraint activateConstraints:@[
     [pinned.leadingAnchor constraintEqualToAnchor:parent.leadingAnchor
                                          constant:inset],
@@ -37,8 +43,7 @@ void ns_layout_pin_top_edges(ns_view *view, ns_view *container, CGFloat inset) {
   NS_ENTER();
   NSView *pinned = NS_IN(NSView, view);
   NSView *parent = NS_IN(NSView, container);
-  pinned.translatesAutoresizingMaskIntoConstraints = NO;
-  [parent addSubview:pinned];
+  syn_layout_prepare(pinned, parent);
   [NSLayoutConstraint activateConstraints:@[
     [pinned.leadingAnchor constraintEqualToAnchor:parent.leadingAnchor
                                          constant:inset],

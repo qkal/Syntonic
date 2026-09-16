@@ -27,9 +27,8 @@ extern "C" {
 /* The handle. One opaque struct type per AppKit class (R4, KTD9). */
 typedef struct ns_view_controller ns_view_controller;
 
-/* NSView's own header (U7) owns this typedef; repeating it keeps this header
- * standalone, and C has allowed a repeated typedef of the same type since
- * C11. */
+/* ns_view.h owns this typedef; repeating it keeps this header standalone, and
+ * C has allowed a repeated typedef of the same type since C11. */
 typedef struct ns_view ns_view;
 
 /* -[NSViewController init] - owned (+1), released with ns_release (R7). */
