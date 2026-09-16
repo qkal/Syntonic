@@ -71,9 +71,10 @@ typedef struct ns_view ns_view;
 /*
  * NSOutlineViewDataSource and NSOutlineViewDelegate, merged into one struct of
  * function pointers (KTD6). `number_of_children_of_item`, `child_of_item`,
- * `is_item_expandable` and `cell_string` are required; `should_expand_item`,
- * `is_group_item`, `should_select_item` and `selection_did_change` are
- * optional. docs/conventions.md's per-protocol table is what says so, because
+ * `is_item_expandable` and `cell_string` are required; `cell_symbol_name`,
+ * `should_expand_item`, `should_collapse_item`, `is_group_item`,
+ * `should_select_item` and `selection_did_change` are optional.
+ * docs/conventions.md's per-protocol table is what says so, because
  * both protocols are entirely @optional in the SDK. An unset required member
  * is reported at install time in a debug build, before AppKit ever asks for a
  * child; an unset optional member behaves exactly as a method the object does
@@ -109,6 +110,20 @@ typedef struct ns_outline_view_callbacks {
    * returned pointer is borrowed by the library for the duration of the
    * callback and copied at once; null is reported in a debug build. */
   const char *_Nonnull (*_Nullable cell_string)(
+      void *_Nullable context, ns_outline_view *_Nonnull sender,
+      const void *_Nonnull item);
+  /* optional. syntonic-owned: the SF Symbol name of the icon this row shows
+   * beside its text, or null for a row with no icon - which is what a group
+   * heading answers. It feeds the same
+   * -[NSOutlineViewDelegate outlineView:viewForTableColumn:item:] that
+   * `cell_string` does, one turn later: the wrapper builds an image view for
+   * the symbol and lays it out ahead of the label. A name the running system
+   * has no symbol for leaves the image view empty rather than being an error,
+   * which is AppKit's own answer for an unknown symbol. The returned pointer
+   * is borrowed by the library for the duration of the callback and copied at
+   * once; leaving the member unset builds exactly the text-only cell an
+   * outline built before this member existed. */
+  const char *_Nullable (*_Nullable cell_symbol_name)(
       void *_Nullable context, ns_outline_view *_Nonnull sender,
       const void *_Nonnull item);
   /* optional. -[NSOutlineViewDelegate outlineView:shouldExpandItem:] - unset
