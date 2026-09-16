@@ -188,6 +188,22 @@ ns_view *ns_table_view_header_view(ns_table_view *table_view) {
   NS_LEAVE();
 }
 
+void ns_table_view_set_column_autoresizing_style(
+    ns_table_view *table_view, ns_table_view_column_autoresizing_style style) {
+  NS_ENTER();
+  NS_IN(NSTableView, table_view).columnAutoresizingStyle =
+      (NSTableViewColumnAutoresizingStyle)style;
+  NS_LEAVE();
+}
+
+ns_table_view_column_autoresizing_style
+ns_table_view_get_column_autoresizing_style(ns_table_view *table_view) {
+  NS_ENTER();
+  return (ns_table_view_column_autoresizing_style)NS_IN(NSTableView, table_view)
+      .columnAutoresizingStyle;
+  NS_LEAVE();
+}
+
 void ns_table_view_set_uses_alternating_row_background_colors(
     ns_table_view *table_view, bool uses_alternating_colors) {
   NS_ENTER();

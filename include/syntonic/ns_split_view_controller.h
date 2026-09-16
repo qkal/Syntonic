@@ -44,6 +44,7 @@ typedef struct ns_split_view_controller ns_split_view_controller;
  * so this header stands alone. C has allowed a repeated typedef of the same
  * type since C11. */
 typedef struct ns_split_view_item ns_split_view_item;
+typedef struct ns_split_view ns_split_view;
 typedef struct ns_view_controller ns_view_controller;
 
 /* -[NSSplitViewController init] - owned (+1), released with ns_release (R7).
@@ -73,6 +74,14 @@ long ns_split_view_controller_split_view_item_count(
  * keeps it longer (R7). */
 ns_split_view_item *_Nonnull ns_split_view_controller_split_view_item_at_index(
     ns_split_view_controller *_Nonnull split_view_controller, long index)
+    API_AVAILABLE(macos(26.0));
+
+/* -[NSSplitViewController splitView] - a strong property, so this is borrowed:
+ * valid while the controller holds it, kept longer with ns_retain (R7). The
+ * controller makes this view for itself and it is not the controller's own
+ * `view`; it is where a divider position is set. See ns_split_view.h. */
+ns_split_view *_Nonnull ns_split_view_controller_split_view(
+    ns_split_view_controller *_Nonnull split_view_controller)
     API_AVAILABLE(macos(26.0));
 
 /* -[NSSplitViewController toggleSidebar:] - collapses or reveals the first

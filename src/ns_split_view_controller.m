@@ -5,6 +5,7 @@
 #import <AppKit/AppKit.h>
 
 #include "ns_internal.h"
+#include "syntonic/ns_split_view.h"
 #include "syntonic/ns_split_view_controller.h"
 #include "syntonic/ns_split_view_item.h"
 
@@ -43,6 +44,16 @@ ns_split_view_item *ns_split_view_controller_split_view_item_at_index(
   return NS_OUT(ns_split_view_item,
                 NS_IN(NSSplitViewController, split_view_controller)
                     .splitViewItems[(NSUInteger)index]);
+  NS_LEAVE();
+}
+
+/* Borrowed: `splitView` is a strong property (R7). */
+ns_split_view *ns_split_view_controller_split_view(
+    ns_split_view_controller *split_view_controller) {
+  NS_ENTER();
+  return NS_OUT(ns_split_view, NS_IN(NSSplitViewController,
+                                     split_view_controller)
+                                   .splitView);
   NS_LEAVE();
 }
 

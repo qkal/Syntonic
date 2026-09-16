@@ -680,3 +680,54 @@ SYN_TEST(creating_a_table_off_the_main_thread_names_the_function) {
                     "ns_table_view_create_with_frame");
   SYN_ASSERT_ABORTS("table_created_off_the_main_thread", "main thread only");
 }
+
+/* ---- the two properties the list pane sets (U12 gaps, R17) ----
+ *
+ * The twin sets the column autoresizing style and the alternating row
+ * background colours. Only one of the two is a change: the SDK's default
+ * autoresizing style is already last-column-only, which is what the twin asks
+ * for, so that line moves nothing. The alternating colours default to off and
+ * turning them on is what the reviewer sees. */
+
+SYN_TEST(the_column_autoresizing_style_and_alternating_colours_round_trip) {
+  syn_test_bootstrap();
+  ns_scroll_view *scroll = NULL;
+  ns_table_view *table = syn_table_create(&scroll);
+
+  SYN_ASSERT_MSG(ns_table_view_get_column_autoresizing_style(table) ==
+                     NS_TABLE_VIEW_LAST_COLUMN_ONLY_AUTORESIZING_STYLE,
+                 "a new table does not start on the last-column-only "
+                 "autoresizing style, so the twin's line is not a no-op after "
+                 "all");
+  SYN_ASSERT_MSG(!ns_table_view_uses_alternating_row_background_colors(table),
+                 "a new table already draws alternating row backgrounds");
+
+  /* Every value of the enum reaches AppKit and comes back, which is what pins
+   * the C enum's numbers to the SDK's (R5). */
+  const ns_table_view_column_autoresizing_style styles[] = {
+      NS_TABLE_VIEW_NO_COLUMN_AUTORESIZING,
+      NS_TABLE_VIEW_UNIFORM_COLUMN_AUTORESIZING_STYLE,
+      NS_TABLE_VIEW_SEQUENTIAL_COLUMN_AUTORESIZING_STYLE,
+      NS_TABLE_VIEW_REVERSE_SEQUENTIAL_COLUMN_AUTORESIZING_STYLE,
+      NS_TABLE_VIEW_LAST_COLUMN_ONLY_AUTORESIZING_STYLE,
+      NS_TABLE_VIEW_FIRST_COLUMN_ONLY_AUTORESIZING_STYLE};
+  for (size_t i = 0; i < sizeof(styles) / sizeof(*styles); i++) {
+    ns_table_view_set_column_autoresizing_style(table, styles[i]);
+    SYN_ASSERT_MSG(ns_table_view_get_column_autoresizing_style(table) ==
+                       styles[i],
+                   "autoresizing style %d did not read back",
+                   (int)styles[i]);
+  }
+
+  ns_table_view_set_column_autoresizing_style(
+      table, NS_TABLE_VIEW_LAST_COLUMN_ONLY_AUTORESIZING_STYLE);
+  ns_table_view_set_uses_alternating_row_background_colors(table, true);
+  SYN_ASSERT_MSG(ns_table_view_uses_alternating_row_background_colors(table),
+                 "alternating row backgrounds did not read back on");
+  ns_table_view_set_uses_alternating_row_background_colors(table, false);
+  SYN_ASSERT_MSG(!ns_table_view_uses_alternating_row_background_colors(table),
+                 "alternating row backgrounds did not read back off");
+
+  ns_release(table);
+  ns_release(scroll);
+}

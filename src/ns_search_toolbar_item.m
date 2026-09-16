@@ -5,6 +5,7 @@
 #import <AppKit/AppKit.h>
 
 #include "ns_internal.h"
+#include "syntonic/ns_search_field.h"
 #include "syntonic/ns_search_toolbar_item.h"
 
 /* Owned (+1): the inherited initWithItemIdentifier: returns a fresh object,
@@ -20,13 +21,13 @@ ns_search_toolbar_item *ns_search_toolbar_item_create_with_item_identifier(
   NS_LEAVE();
 }
 
-/* Borrowed: `searchField` is a strong property, and an NSSearchField is an
- * NSTextField, which is the wrapped type it crosses as (R5, R7). */
-ns_text_field *ns_search_toolbar_item_search_field(
+/* Borrowed: `searchField` is a strong property, and the SDK declares it an
+ * NSSearchField, which is the wrapped type it crosses as (R5, R7). */
+ns_search_field *ns_search_toolbar_item_search_field(
     ns_search_toolbar_item *search_toolbar_item) {
   NS_ENTER();
-  return NS_OUT(ns_text_field, NS_IN(NSSearchToolbarItem, search_toolbar_item)
-                                   .searchField);
+  return NS_OUT(ns_search_field, NS_IN(NSSearchToolbarItem, search_toolbar_item)
+                                     .searchField);
   NS_LEAVE();
 }
 

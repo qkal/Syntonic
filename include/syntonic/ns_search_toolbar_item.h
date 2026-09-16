@@ -3,15 +3,15 @@
  * expand-on-focus behaviour a macOS search toolbar item has (R16, F2).
  *
  * The item owns the field: ask for it with ns_search_toolbar_item_search_field
- * and configure it through the text field and control functions it already
- * has. The field is an NSSearchField, which is an NSTextField, so it crosses
- * as an ns_text_field and its inherited API is reached through the upcasts
- * (R5).
+ * and configure it through ns_search_field.h and the upcasts that reach its
+ * inherited API (R5).
  *
  *     ns_search_toolbar_item *item =
  *         ns_search_toolbar_item_create_with_item_identifier(identifier);
- *     ns_text_field *field = ns_search_toolbar_item_search_field(item);
- *     ns_control_set_action(ns_text_field_as_control(field), on_search, &model);
+ *     ns_search_field *field = ns_search_toolbar_item_search_field(item);
+ *     ns_search_field_set_sends_search_string_immediately(field, true);
+ *     ns_control_set_action(ns_search_field_as_control(field), on_search,
+ *                           &model);
  *
  * and in the action, the text the user typed (F2):
  *
@@ -41,11 +41,11 @@ extern "C" {
 /* The handle. One opaque struct type per AppKit class (R4, KTD9). */
 typedef struct ns_search_toolbar_item ns_search_toolbar_item;
 
-/* Declared by ns_toolbar_item.h and ns_text_field.h and repeated here so this
- * header stands alone. C has allowed a repeated typedef of the same type since
- * C11. */
+/* Declared by ns_toolbar_item.h and ns_search_field.h and repeated here so
+ * this header stands alone. C has allowed a repeated typedef of the same type
+ * since C11. */
 typedef struct ns_toolbar_item ns_toolbar_item;
-typedef struct ns_text_field ns_text_field;
+typedef struct ns_search_field ns_search_field;
 
 /* -[NSToolbarItem initWithItemIdentifier:] - owned (+1), released with
  * ns_release (R7). A constructor is the one inherited member a subclass
@@ -59,8 +59,10 @@ ns_search_toolbar_item_create_with_item_identifier(
 /* -[NSSearchToolbarItem searchField] - a strong property, so this is borrowed:
  * valid while the item holds it, kept longer with ns_retain (R7). The item
  * manages the field's layout, so set its action and read its text, but leave
- * its frame alone. */
-ns_text_field *_Nonnull ns_search_toolbar_item_search_field(
+ * its frame alone. The SDK declares this property an NSSearchField, so that is
+ * what crosses; reach NSTextField's own API through
+ * ns_search_field_as_text_field rather than through an implicit upcast (R5). */
+ns_search_field *_Nonnull ns_search_toolbar_item_search_field(
     ns_search_toolbar_item *_Nonnull search_toolbar_item)
     API_AVAILABLE(macos(26.0));
 

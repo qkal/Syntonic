@@ -5,6 +5,8 @@
  * tree down (R7, R14, F3, KTD7, KTD8).
  */
 
+#include <objc/message.h>
+#include <objc/runtime.h>
 #include <pthread.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -436,5 +438,166 @@ SYN_TEST(a_window_reports_the_toolbar_and_the_toolbar_style_it_was_given) {
                  "a null toolbar left one on the window");
 
   ns_release(toolbar);
+  ns_release(window);
+}
+
+/* ---- the move and resize members (U12 gaps) ----
+ *
+ * Moving a window lays nothing out, so a program that reports its own geometry
+ * has to be told; resizing is the same event on the other axis. Both are
+ * optional members of the same struct as will_close. */
+
+static int syn_moves;
+static int syn_resizes;
+static void *syn_move_context;
+static const void *syn_move_sender;
+static const void *syn_resize_sender;
+
+static void syn_on_did_move(void *context, ns_window *sender) {
+  syn_moves++;
+  syn_move_context = context;
+  syn_move_sender = sender;
+}
+
+static void syn_on_did_resize(void *context, ns_window *sender) {
+  syn_resizes++;
+  syn_move_context = context;
+  syn_resize_sender = sender;
+}
+
+static void syn_reset_geometry(void) {
+  syn_moves = syn_resizes = 0;
+  syn_move_context = NULL;
+  syn_move_sender = syn_resize_sender = NULL;
+}
+
+SYN_TEST(moving_and_resizing_fire_their_members_with_the_window_and_context) {
+  syn_test_bootstrap();
+  syn_reset_geometry();
+  int context = 31;
+
+  ns_window *window = syn_window_create();
+  ns_window_callbacks callbacks = {.did_move = syn_on_did_move,
+                                   .did_resize = syn_on_did_resize};
+  ns_window_set_callbacks(window, &callbacks, &context);
+  SYN_ASSERT_SHIMS(1);
+
+  ns_window_set_frame_origin(window, CGPointMake(120, 140));
+  SYN_WAIT_FOR(syn_moves >= 1, 1000);
+  SYN_ASSERT_MSG(syn_move_sender == window,
+                 "did_move got a sender that is not the window that moved");
+  SYN_ASSERT_MSG(syn_move_context == &context,
+                 "did_move did not get the context");
+  SYN_ASSERT_MSG(syn_resizes == 0, "moving the window fired did_resize");
+
+  /* The frame the callback reported on is the frame the window has. */
+  CGRect moved = ns_window_frame(window);
+  SYN_ASSERT_MSG(moved.origin.x == 120 && moved.origin.y == 140,
+                 "the window did not keep the origin it was moved to");
+
+  ns_window_set_content_size(window, CGSizeMake(520, 360));
+  SYN_WAIT_FOR(syn_resizes >= 1, 1000);
+  SYN_ASSERT_MSG(syn_resize_sender == window,
+                 "did_resize got a sender that is not the window that "
+                 "resized");
+  SYN_ASSERT_MSG(syn_move_context == &context,
+                 "did_resize did not get the context");
+
+  /* setContentSize: holds the window's top-left corner, so a resize moves the
+   * origin too and fires did_move alongside did_resize. */
+  CGRect resized = ns_window_frame(window);
+  SYN_ASSERT_MSG(resized.size.width == 520,
+                 "the window did not take the content width it was given");
+
+  ns_release(window);
+  SYN_ASSERT_SHIMS(0);
+}
+
+SYN_TEST(unset_move_and_resize_members_are_methods_that_do_not_exist) {
+  syn_test_bootstrap();
+  syn_reset_geometry();
+
+  ns_window *window = syn_window_create();
+  ns_window_callbacks empty = {0};
+  ns_window_set_callbacks(window, &empty, NULL);
+
+  SYN_ASSERT_MSG(!syn_test_delegate_responds(window, "windowDidMove:"),
+                 "an unset did_move is reported as implemented");
+  SYN_ASSERT_MSG(!syn_test_delegate_responds(window, "windowDidResize:"),
+                 "an unset did_resize is reported as implemented");
+
+  ns_window_set_frame_origin(window, CGPointMake(60, 60));
+  ns_window_set_content_size(window, CGSizeMake(320, 240));
+  syn_test_spin(100);
+  SYN_ASSERT_MSG(syn_moves == 0, "an unset did_move fired");
+  SYN_ASSERT_MSG(syn_resizes == 0, "an unset did_resize fired");
+
+  /* The two that are set answer yes, so the shim reports per member and not
+   * per protocol (KTD8). */
+  ns_window_callbacks both = {.did_move = syn_on_did_move,
+                              .did_resize = syn_on_did_resize};
+  ns_window_set_callbacks(window, &both, NULL);
+  SYN_ASSERT_MSG(syn_test_delegate_responds(window, "windowDidMove:"),
+                 "a set did_move is reported as absent");
+  SYN_ASSERT_MSG(syn_test_delegate_responds(window, "windowDidResize:"),
+                 "a set did_resize is reported as absent");
+  SYN_ASSERT_MSG(!syn_test_delegate_responds(window, "windowWillClose:"),
+                 "an unset will_close is reported as implemented");
+
+  ns_window_set_callbacks(window, NULL, NULL);
+  ns_release(window);
+}
+
+/* ---- makeFirstResponder: (U12 gaps, R19) ----
+ *
+ * initialFirstResponder is only consulted the first time a window becomes key,
+ * so a window controller that shows a window and moves focus in the same
+ * breath needs this one. */
+
+/* -[NSWindow firstResponder] has no C function of its own - the twins never
+ * read it - so this suite reaches it through the runtime rather than spelling
+ * a wrapper nobody asked for, exactly as tests/test_split_view.c does. */
+static const void *syn_first_responder(ns_window *window) {
+  return (const void *)((id(*)(id, SEL))objc_msgSend)(
+      (id)(void *)window, sel_getUid("firstResponder"));
+}
+
+SYN_TEST(make_first_responder_moves_focus_and_reports_that_it_did) {
+  syn_test_bootstrap();
+  ns_window *window = syn_window_create();
+  ns_view *content = ns_window_content_view(window);
+  SYN_ASSERT_MSG(content != NULL, "the window has no content view");
+
+  ns_view *pane = ns_view_create_with_frame(CGRectMake(10, 10, 200, 100));
+  ns_view_add_subview(content, pane);
+  SYN_ASSERT_MSG(ns_window_make_first_responder(window, pane),
+                 "the window refused to make the view first responder");
+  SYN_ASSERT_MSG(syn_first_responder(window) == (const void *)pane,
+                 "the view did not become the first responder");
+
+  /* Null is the window itself, which AppKit accepts: the return is an answer,
+   * not misuse (R12). */
+  SYN_ASSERT_MSG(ns_window_make_first_responder(window, NULL),
+                 "the window refused a null responder");
+  SYN_ASSERT_MSG(syn_first_responder(window) == (const void *)window,
+                 "a null responder did not leave the window itself focused");
+
+  /* An editable field hands focus to the window's field editor rather than
+   * taking it itself, which is AppKit's own behaviour and the reason this
+   * test pins where focus landed and not only the BOOL. */
+  ns_text_field *field = ns_text_field_create_with_string("focus me");
+  ns_view_set_frame(ns_text_field_as_view(field), CGRectMake(10, 150, 200, 24));
+  ns_view_add_subview(content, ns_text_field_as_view(field));
+  SYN_ASSERT_MSG(ns_window_make_first_responder(window,
+                                                ns_text_field_as_view(field)),
+                 "the window refused to move focus into the field");
+  SYN_ASSERT_MSG(syn_first_responder(window) != (const void *)window,
+                 "focus stayed on the window instead of moving into the "
+                 "field's editor");
+  SYN_ASSERT_STR_EQ(syn_test_class_name(syn_first_responder(window)),
+                    "NSTextView");
+
+  ns_release(field);
+  ns_release(pane);
   ns_release(window);
 }

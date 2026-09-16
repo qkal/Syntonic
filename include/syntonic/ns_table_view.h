@@ -78,6 +78,20 @@ typedef enum ns_table_view_style : int64_t {
   NS_TABLE_VIEW_STYLE_PLAIN = 4,
 } ns_table_view_style;
 
+/* NSTableViewColumnAutoresizingStyle. What a table does with its columns when
+ * its own frame changes. The SDK's default is
+ * NS_TABLE_VIEW_LAST_COLUMN_ONLY_AUTORESIZING_STYLE, which is what a list pane
+ * with one wide title column wants, so a program that wants that need not set
+ * it at all. */
+typedef enum ns_table_view_column_autoresizing_style : uint64_t {
+  NS_TABLE_VIEW_NO_COLUMN_AUTORESIZING = 0,
+  NS_TABLE_VIEW_UNIFORM_COLUMN_AUTORESIZING_STYLE = 1,
+  NS_TABLE_VIEW_SEQUENTIAL_COLUMN_AUTORESIZING_STYLE = 2,
+  NS_TABLE_VIEW_REVERSE_SEQUENTIAL_COLUMN_AUTORESIZING_STYLE = 3,
+  NS_TABLE_VIEW_LAST_COLUMN_ONLY_AUTORESIZING_STYLE = 4,
+  NS_TABLE_VIEW_FIRST_COLUMN_ONLY_AUTORESIZING_STYLE = 5,
+} ns_table_view_column_autoresizing_style;
+
 /*
  * NSTableViewDataSource and NSTableViewDelegate, merged into one struct of
  * function pointers (KTD6). `number_of_rows` and `cell_string` are required
@@ -188,6 +202,20 @@ void ns_table_view_set_header_view(ns_table_view *_Nonnull table_view,
 /* -[NSTableView headerView] - a strong property, so this is borrowed and valid
  * while the table holds it; ns_retain keeps it past that (R7). */
 ns_view *_Nullable ns_table_view_header_view(
+    ns_table_view *_Nonnull table_view) API_AVAILABLE(macos(26.0));
+
+/* -[NSTableView setColumnAutoresizingStyle:] - what the columns do when the
+ * table's own frame changes. The SDK's default is already
+ * NS_TABLE_VIEW_LAST_COLUMN_ONLY_AUTORESIZING_STYLE. */
+void ns_table_view_set_column_autoresizing_style(
+    ns_table_view *_Nonnull table_view,
+    ns_table_view_column_autoresizing_style style) API_AVAILABLE(macos(26.0));
+
+/* -[NSTableView columnAutoresizingStyle] - get_, because
+ * ns_table_view_column_autoresizing_style is already a type name and C puts
+ * the two in one namespace (R5). */
+ns_table_view_column_autoresizing_style
+ns_table_view_get_column_autoresizing_style(
     ns_table_view *_Nonnull table_view) API_AVAILABLE(macos(26.0));
 
 /* -[NSTableView setUsesAlternatingRowBackgroundColors:] */

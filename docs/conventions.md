@@ -164,13 +164,32 @@ Give each constant the SDK's own numeric value explicitly. The C enum is a
 separate type from AppKit's; the `.m` casts between them, and the values have to
 agree.
 
-A **string constant keeps AppKit's spelling exactly**, because a C caller never
-sees AppKit's own symbol and the identical spelling is what makes the two
-documents line up:
+A **string constant follows the enum constant rule** — `NS_`-prefixed upper
+case, named after AppKit's own symbol — and carries AppKit's *value* as a C
+string literal:
 
 ```c
-extern const char *const NSToolbarSidebarTrackingSeparatorItemIdentifier;
+/* in the header */
+extern const char *const NS_TOOLBAR_SIDEBAR_TRACKING_SEPARATOR_ITEM_IDENTIFIER;
+
+/* in the .m */
+const char *const NS_TOOLBAR_SIDEBAR_TRACKING_SEPARATOR_ITEM_IDENTIFIER =
+    "NSToolbarSidebarTrackingSeparatorItemIdentifier";
 ```
+
+**Reusing AppKit's own spelling does not compile.** AppKit declares the symbol
+as an `NSString *`, so a C `extern const char *const` under that exact name is a
+redeclaration with a different type and clang rejects it — and a wrapper `.m`
+includes both headers by definition, so nothing would build. There is no
+initializing a C constant from an `NSString` at load time either, which is why
+the value is spelled out.
+
+A hand-copied value is a value that can drift, so **a test pins each constant
+equal to AppKit's own symbol**. `ns_toolbar_item.h`'s three toolbar identifiers
+are the worked example, and `tests/test_toolbar.c` is where they are pinned.
+The same reasoning is why accessibility roles cross as plain strings the caller
+spells and Syntonic declares no constants for at all (see
+[Accessibility](#accessibility)).
 
 ### Callback members
 
@@ -710,7 +729,7 @@ required**, because every protocol v0 wraps is `@optional` in the SDK.
 | C struct | AppKit protocol(s) | Required | Optional | Served from stored data (dropped) | Unit |
 |---|---|---|---|---|---|
 | `ns_application_callbacks` | `NSApplicationDelegate` | none | `did_finish_launching`, `should_terminate_after_last_window_closed`, `will_terminate` | — | U14 ✓ |
-| `ns_window_callbacks` | `NSWindowDelegate` | none | `will_close` | — | U14 ✓ |
+| `ns_window_callbacks` | `NSWindowDelegate` | none | `will_close`, `did_move`, `did_resize` | — | U14 ✓, U12 gaps ✓ |
 | `ns_text_field_callbacks` | `NSTextFieldDelegate` | none | `did_change`, `did_end_editing` | — | U7 ✓ |
 | `ns_table_view_callbacks` | `NSTableViewDataSource` + `NSTableViewDelegate` (merged) | `number_of_rows`, `cell_string` | `selection_did_change` | — | U8 ✓ |
 | `ns_outline_view_callbacks` | `NSOutlineViewDataSource` + `NSOutlineViewDelegate` (merged) | `number_of_children_of_item`, `child_of_item`, `is_item_expandable`, `cell_string` | `cell_symbol_name`, `should_expand_item`, `should_collapse_item`, `is_group_item`, `should_select_item`, `selection_did_change` | — | U8 ✓ |
@@ -1192,6 +1211,7 @@ named section in its own commit; nothing else in the document moves.
 | U12 gaps ✓ | landed, the three things the C twin needed that no unit had wrapped: NSGridRow, NSGridColumn and NSGridCell in `ns_grid_view.h`, whose five child accessors are the new row on the [borrowed-return allowlist](#the-mechanical-rule-read-the-sdk-propertys-attribute) - none of the three is a view, so none has an upcast, and none needs [the index check](#the-index-check) because AppKit raises cleanly and changes nothing first; `cell_symbol_name` in the outline's row above, which is the first case of **two struct members feeding one selector**, so `respondsToSelector:` now answers yes when any member of a selector is set rather than the first; `lineBreakMode` on `ns_control`, not on `ns_text_field`, because `NSControl.h` is what declares it. Two things decided in the headers rather than here: an `NSRange` argument crosses as its location and length, two `long`s, because Foundation's `NSRange.h` is not includable from C; `+[NSGridCell emptyContentView]` is a `strong` class property and therefore borrowed, needing no allowlist row |
 | U9 | the toolbar row, including the dropped identifier methods |
 | U10 ✓ | landed, all three settled by rules already here: a constructor belongs to the concrete class even when the SDK header declares no initializer of its own, as `ns_view_controller_create` already showed and `ns_tab_view_controller_create` repeats; a nil AppKit documents is an answer, not misuse, so `+[NSImage imageWithSystemSymbolName:accessibilityDescription:]` crosses its nil as null rather than aborting (R12 checks misuse, not results); and `-[NSTabViewController setSelectedTabViewItemIndex:]` takes [the index check](#the-index-check) because AppKit is clean on neither side of the range - a negative index selects the first tab silently, and the exception past the end names a range that includes the index it rejected. No per-protocol row and no post-init fixup: `NSTabViewController` is its own tab view's and toolbar's delegate and Syntonic wraps neither protocol, and none of `NSTabViewController`, `NSTabViewItem` or `NSImage` needs a line after construction |
+| U12 gaps 2 ✓ | landed, the six things a walk of `twins/swift/MainWindowController.swift` and `ListDetailViewController.swift` against the C surface found missing: `NSSplitView` in `ns_split_view.h`, whose `setPosition:ofDividerAtIndex:` is a new case for [the index check](#the-index-check) — AppKit takes an out-of-range divider index silently, raising nothing and moving nothing — and which wraps no position *reader* because `NSSplitView` declares none, a pinned position being read back from the pane's own frame; `splitView` on the split view controller, a `strong` property and therefore borrowed; `did_move` and `did_resize` in the window row above; `-[NSWindow makeFirstResponder:]`, which takes an `ns_view` because v0 wraps no `NSResponder`, the same shape `setInitialFirstResponder:` already took; `NSSearchField` in `ns_search_field.h`, and with it `ns_search_toolbar_item_search_field`'s return type changed from `ns_text_field` to `ns_search_field` — **a breaking change to an existing function**, made because the SDK property really is an `NSSearchField` and the old return was the implicit upcast [Upcasts](#upcasts) forbids; `columnAutoresizingStyle` on `ns_table_view`. The string-constant correction in [Enums and string constants](#enums-and-string-constants) is this unit's one edit to a rule rather than an addition. Three things measured rather than assumed, each pinned by a test: `columnAutoresizingStyle`'s SDK default is already last-column-only, so the twin's line changes nothing; the field an `NSSearchToolbarItem` makes for itself arrives with `sendsSearchStringImmediately` already true although a bare `NSSearchField`'s default is false; and `makeFirstResponder:` answers true even when the responder declines and focus falls back to the window, so a suite pins where focus landed and not only the BOOL. No per-protocol row beyond the window's and no post-init fixup |
 | U13 | the combo box row, confirmed against the shipped wrapper — the row is pre-filled from the SDK header so the author has a source |
 | U11 | whatever the README checkpoint's feedback changes; after U11 a change here is a public change |
 

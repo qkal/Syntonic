@@ -346,3 +346,138 @@ SYN_TEST(creating_a_split_view_controller_off_the_main_thread_names_it) {
   SYN_ASSERT_ABORTS("split_view_controller_created_off_the_main_thread",
                     "main thread only");
 }
+
+/* ---- the split view and its dividers (U12 gaps, R15) ----
+ *
+ * The twin pins the sidebar to 220 points and the list to 400, which is what
+ * the whole comparison's fixed geometry rests on. There is no divider-position
+ * reader in AppKit, so the position is read back from the pane's own frame -
+ * exactly what the twins' layout reports print. */
+
+enum { SYN_TWIN_SIDEBAR = 220, SYN_TWIN_LIST = 400 };
+
+static CGFloat syn_pane_width(ns_split_view_controller *split, long index) {
+  ns_split_view_item *item =
+      ns_split_view_controller_split_view_item_at_index(split, index);
+  return ns_view_frame(
+             ns_view_controller_view(ns_split_view_item_view_controller(item)))
+      .size.width;
+}
+
+static void syn_pin_dividers(ns_split_view *split_view) {
+  ns_split_view_set_position_of_divider_at_index(split_view, SYN_TWIN_SIDEBAR,
+                                                 0);
+  ns_split_view_set_position_of_divider_at_index(
+      split_view, SYN_TWIN_SIDEBAR + SYN_TWIN_LIST, 1);
+}
+
+SYN_TEST(the_controllers_split_view_is_a_vertical_view_of_its_own) {
+  syn_test_bootstrap();
+  ns_split_view_controller *split = syn_split_create();
+  ns_window *window = syn_window_create(split);
+
+  ns_split_view *split_view = ns_split_view_controller_split_view(split);
+  SYN_ASSERT_STR_EQ(syn_test_class_name(split_view), "NSSplitView");
+
+  /* The controller makes this view for itself and it is not the controller's
+   * own view, which is why the accessor exists at all. */
+  SYN_ASSERT_MSG((const void *)ns_split_view_as_view(split_view) !=
+                     (const void *)ns_view_controller_view(
+                         ns_split_view_controller_as_view_controller(split)),
+                 "the split view is the controller's own view after all");
+  SYN_ASSERT_MSG((const void *)ns_split_view_as_view(split_view) ==
+                     (const void *)split_view,
+                 "the upcast returned a different pointer");
+
+  /* A sidebar, a list and a detail pane side by side. */
+  SYN_ASSERT_MSG(ns_split_view_vertical(split_view),
+                 "a split view controller's split view is not vertical");
+  ns_split_view_set_vertical(split_view, false);
+  SYN_ASSERT_MSG(!ns_split_view_vertical(split_view),
+                 "turning vertical off did not read back");
+  ns_split_view_set_vertical(split_view, true);
+  SYN_ASSERT_MSG(ns_split_view_vertical(split_view),
+                 "turning vertical back on did not read back");
+
+  ns_window_close(window);
+  ns_release(window);
+  ns_release(split);
+}
+
+/* The twin's placeDividers, at the twin's own size and after a resize (F4). */
+SYN_TEST(pinned_divider_positions_read_back_at_two_window_sizes) {
+  syn_test_bootstrap();
+  ns_split_view_controller *split = syn_split_create();
+  ns_window *window = syn_window_create(split);
+  ns_split_view *split_view = ns_split_view_controller_split_view(split);
+
+  ns_window_set_content_size(window, CGSizeMake(1000, 640));
+  syn_layout(ns_window_content_view(window));
+  syn_pin_dividers(split_view);
+  syn_layout(ns_window_content_view(window));
+
+  SYN_ASSERT_MSG(syn_pane_width(split, 0) == (CGFloat)SYN_TWIN_SIDEBAR,
+                 "the sidebar is %g points wide at 1000, not %d",
+                 (double)syn_pane_width(split, 0), SYN_TWIN_SIDEBAR);
+  SYN_ASSERT_MSG(syn_pane_width(split, 1) == (CGFloat)SYN_TWIN_LIST,
+                 "the list is %g points wide at 1000, not %d",
+                 (double)syn_pane_width(split, 1), SYN_TWIN_LIST);
+
+  /* The twin's resized size. The sidebar holds; the list gives way, because a
+   * position is a request AppKit clamps against the detail pane's minimum
+   * thickness rather than a setting (R15). */
+  ns_window_set_content_size(window, CGSizeMake(820, 520));
+  syn_layout(ns_window_content_view(window));
+  syn_pin_dividers(split_view);
+  syn_layout(ns_window_content_view(window));
+
+  SYN_ASSERT_MSG(syn_pane_width(split, 0) == (CGFloat)SYN_TWIN_SIDEBAR,
+                 "the sidebar is %g points wide at 820, not %d",
+                 (double)syn_pane_width(split, 0), SYN_TWIN_SIDEBAR);
+  SYN_ASSERT_MSG(syn_pane_width(split, 2) == (CGFloat)SYN_LIST_MIN,
+                 "the detail pane is %g points wide at 820, not its %d point "
+                 "minimum thickness",
+                 (double)syn_pane_width(split, 2), SYN_LIST_MIN);
+
+  ns_window_close(window);
+  ns_release(window);
+  ns_release(split);
+}
+
+/* ---- the index check (R12, KTD4) ----
+ *
+ * AppKit takes an out-of-range divider index silently - it raises nothing and
+ * moves nothing - so this is the case docs/conventions.md says to check by
+ * hand rather than leave to the entry macro's exception report. */
+
+SYN_ABORT_CASE(divider_position_set_past_the_last_divider) {
+  syn_test_bootstrap();
+  ns_split_view_controller *split = syn_split_create();
+  ns_window *window = syn_window_create(split);
+  (void)window;
+  /* Three panes, so the dividers are 0 and 1. */
+  ns_split_view_set_position_of_divider_at_index(
+      ns_split_view_controller_split_view(split), 220, 2);
+}
+
+SYN_TEST(setting_a_divider_past_the_last_one_reports_the_index_and_the_range) {
+  SYN_ASSERT_ABORTS("divider_position_set_past_the_last_divider",
+                    "ns_split_view_set_position_of_divider_at_index");
+  SYN_ASSERT_ABORTS("divider_position_set_past_the_last_divider",
+                    "index 2 is out of range; this call accepts 0 through 1");
+}
+
+SYN_ABORT_CASE(divider_position_set_at_a_negative_index) {
+  syn_test_bootstrap();
+  ns_split_view_controller *split = syn_split_create();
+  ns_window *window = syn_window_create(split);
+  (void)window;
+  ns_split_view_set_position_of_divider_at_index(
+      ns_split_view_controller_split_view(split), 220, -1);
+}
+
+SYN_TEST(setting_a_divider_at_a_negative_index_reports_it_too) {
+  SYN_ASSERT_ABORTS("divider_position_set_at_a_negative_index",
+                    "ns_split_view_set_position_of_divider_at_index");
+  SYN_ASSERT_ABORTS("divider_position_set_at_a_negative_index", "index -1");
+}

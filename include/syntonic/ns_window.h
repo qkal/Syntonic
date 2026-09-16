@@ -75,6 +75,17 @@ typedef struct ns_window_callbacks {
    * nothing beyond the window, so the window is what crosses (R5). */
   void (*_Nullable will_close)(void *_Nullable context,
                                ns_window *_Nonnull sender);
+  /* optional. -[NSWindowDelegate windowDidMove:] - the window's frame origin
+   * changed. Moving a window lays nothing out again, so this is where a
+   * program that reports its own geometry refreshes it. The notification
+   * carries nothing beyond the window (R5). */
+  void (*_Nullable did_move)(void *_Nullable context,
+                             ns_window *_Nonnull sender);
+  /* optional. -[NSWindowDelegate windowDidResize:] - the window's frame size
+   * changed, after AppKit has laid the content view out again. The
+   * notification carries nothing beyond the window (R5). */
+  void (*_Nullable did_resize)(void *_Nullable context,
+                               ns_window *_Nonnull sender);
 } ns_window_callbacks;
 
 /* -[NSWindow initWithContentRect:styleMask:backing:defer:] - owned (+1),
@@ -194,6 +205,19 @@ void ns_window_set_initial_first_responder(ns_window *_Nonnull window,
  * valid while the view tree holds it, kept longer with ns_retain (R7). */
 ns_view *_Nullable ns_window_initial_first_responder(
     ns_window *_Nonnull window) API_AVAILABLE(macos(26.0));
+
+/* -[NSWindow makeFirstResponder:] - moves focus now, which is what a window
+ * controller does once the window is on screen; initialFirstResponder is only
+ * consulted the first time the window becomes key. True when the responder
+ * took focus, false when the outgoing or incoming responder refused it, which
+ * is an answer and not misuse.
+ *
+ * The SDK takes an NSResponder and v0 wraps none, so a view is what crosses -
+ * the same shape ns_window_set_initial_first_responder takes. Null makes the
+ * window itself the first responder, which AppKit accepts (R11, R12). */
+bool ns_window_make_first_responder(ns_window *_Nonnull window,
+                                    ns_view *_Nullable responder)
+    API_AVAILABLE(macos(26.0));
 
 /* -[NSWindow setAutorecalculatesKeyViewLoop:] - whether AppKit rebuilds the
  * key view loop from the view tree rather than leaving the chain

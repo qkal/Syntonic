@@ -176,9 +176,13 @@ static ns_toolbar_item *syn_item_for(void *context, ns_toolbar *sender,
     ns_search_toolbar_item *item =
         ns_search_toolbar_item_create_with_item_identifier(identifier);
     ns_search_toolbar_item_set_resigns_first_responder_with_cancel(item, true);
-    ns_control_set_action(
-        ns_text_field_as_control(ns_search_toolbar_item_search_field(item)),
-        syn_on_search, model);
+    ns_search_field *field = ns_search_toolbar_item_search_field(item);
+    /* Both twins fire the action on every keystroke rather than after
+     * AppKit's typing pause, which is what makes the list filter live (F2). */
+    ns_search_field_set_sends_whole_search_string(field, false);
+    ns_search_field_set_sends_search_string_immediately(field, true);
+    ns_control_set_action(ns_search_field_as_control(field), syn_on_search,
+                          model);
     /* The upcast carries the same +1 the constructor handed back. */
     return ns_search_toolbar_item_as_toolbar_item(item);
   }
@@ -501,9 +505,10 @@ SYN_TEST(typing_into_the_search_field_delivers_the_sender_and_its_text) {
                      search),
                  "the search item does not resign first responder on cancel");
 
-  ns_text_field *field = ns_search_toolbar_item_search_field(search);
+  ns_search_field *field = ns_search_toolbar_item_search_field(search);
   SYN_ASSERT_MSG(field != NULL, "the search item carries no field");
-  ns_control *control = ns_text_field_as_control(field);
+  SYN_ASSERT_STR_EQ(syn_test_class_name(field), "NSSearchField");
+  ns_control *control = ns_search_field_as_control(field);
 
   ns_control_set_string_value(control, "ring");
   SYN_ASSERT_MSG(ns_control_send_action(control),
@@ -651,4 +656,93 @@ SYN_TEST(creating_a_toolbar_off_the_main_thread_names_it) {
   SYN_ASSERT_ABORTS("toolbar_created_off_the_main_thread",
                     "ns_toolbar_create_with_identifier");
   SYN_ASSERT_ABORTS("toolbar_created_off_the_main_thread", "main thread only");
+}
+
+/* ---- the search field is a type of its own (U12 gaps, F2) ----
+ *
+ * The item's getter used to return an ns_text_field, which was an implicit
+ * upcast the conventions forbid and left sendsSearchStringImmediately - a
+ * property NSTextField does not have - unreachable. That flag is what decides
+ * whether the action fires on every keystroke or after AppKit's typing pause,
+ * so with it unreachable the two twins filtered the list at different moments. */
+
+SYN_TEST(the_search_item_hands_back_a_search_field_that_upcasts_in_place) {
+  syn_test_bootstrap();
+  ns_search_toolbar_item *item =
+      ns_search_toolbar_item_create_with_item_identifier(SYN_SEARCH_ID);
+
+  ns_search_field *field = ns_search_toolbar_item_search_field(item);
+  SYN_ASSERT_MSG(field != NULL, "the search item carries no field");
+  SYN_ASSERT_STR_EQ(syn_test_class_name(field), "NSSearchField");
+
+  /* Every upcast is the identity, so the same object answers all four. */
+  SYN_ASSERT_MSG((const void *)ns_search_field_as_text_field(field) ==
+                     (const void *)field,
+                 "the upcast to a text field returned a different pointer");
+  SYN_ASSERT_MSG((const void *)ns_search_field_as_control(field) ==
+                     (const void *)field,
+                 "the upcast to a control returned a different pointer");
+  SYN_ASSERT_MSG((const void *)ns_search_field_as_view(field) ==
+                     (const void *)field,
+                 "the upcast to a view returned a different pointer");
+
+  /* Inherited API still works through the upcast, which is what makes the
+   * narrower return type a strictly better one (R5). */
+  ns_text_field_set_placeholder_string(ns_search_field_as_text_field(field),
+                                       "Search");
+  char *placeholder =
+      ns_text_field_copy_placeholder_string(ns_search_field_as_text_field(field));
+  SYN_ASSERT_STR_EQ(placeholder, "Search");
+  ns_string_free(placeholder);
+
+  ns_release(item);
+}
+
+SYN_TEST(the_search_fields_two_send_properties_round_trip) {
+  syn_test_bootstrap();
+  ns_search_toolbar_item *item =
+      ns_search_toolbar_item_create_with_item_identifier(SYN_SEARCH_ID);
+  ns_search_field *field = ns_search_toolbar_item_search_field(item);
+
+  /* NSSearchField's own defaults are both false, but the field a search
+   * toolbar item makes for itself arrives with sendsSearchStringImmediately
+   * already true - measured on macOS 27, not assumed, and the reason the C
+   * twin's search fires on every keystroke whether it sets the flag or not. */
+  SYN_ASSERT_MSG(!ns_search_field_sends_whole_search_string(field),
+                 "the item's field does not start with "
+                 "sendsWholeSearchString false");
+  SYN_ASSERT_MSG(ns_search_field_sends_search_string_immediately(field),
+                 "the item's field does not start with "
+                 "sendsSearchStringImmediately true");
+
+  /* What both twins set, which is the same thing said out loud. */
+  ns_search_field_set_sends_whole_search_string(field, false);
+  ns_search_field_set_sends_search_string_immediately(field, true);
+  SYN_ASSERT_MSG(!ns_search_field_sends_whole_search_string(field),
+                 "sendsWholeSearchString did not read back false");
+  SYN_ASSERT_MSG(ns_search_field_sends_search_string_immediately(field),
+                 "sendsSearchStringImmediately did not read back true");
+
+  ns_search_field_set_sends_whole_search_string(field, true);
+  SYN_ASSERT_MSG(ns_search_field_sends_whole_search_string(field),
+                 "sendsWholeSearchString did not read back true");
+  ns_search_field_set_sends_search_string_immediately(field, false);
+  SYN_ASSERT_MSG(!ns_search_field_sends_search_string_immediately(field),
+                 "sendsSearchStringImmediately did not read back false");
+
+  ns_release(item);
+}
+
+SYN_ABORT_CASE(toolbar_item_passed_where_a_search_field_is_expected) {
+  syn_test_bootstrap();
+  ns_search_toolbar_item *item =
+      ns_search_toolbar_item_create_with_item_identifier(SYN_SEARCH_ID);
+  ns_search_field_sends_search_string_immediately((ns_search_field *)item);
+}
+
+SYN_TEST(a_handle_that_is_not_a_search_field_names_both_classes) {
+  SYN_ASSERT_ABORTS("toolbar_item_passed_where_a_search_field_is_expected",
+                    "NSSearchField");
+  SYN_ASSERT_ABORTS("toolbar_item_passed_where_a_search_field_is_expected",
+                    "ns_search_field_sends_search_string_immediately");
 }

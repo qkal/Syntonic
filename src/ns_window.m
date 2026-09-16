@@ -13,7 +13,11 @@
  * source (R9, KTD8). */
 SYN_SHIM_TABLE(syn_window_table, ns_window_callbacks, "NSWindowDelegate",
                SYN_SHIM_OPTIONAL(ns_window_callbacks, will_close,
-                                 "windowWillClose:"));
+                                 "windowWillClose:"),
+               SYN_SHIM_OPTIONAL(ns_window_callbacks, did_move,
+                                 "windowDidMove:"),
+               SYN_SHIM_OPTIONAL(ns_window_callbacks, did_resize,
+                                 "windowDidResize:"));
 
 @interface SynWindowShim : SynShim <NSWindowDelegate>
 @end
@@ -24,6 +28,22 @@ SYN_SHIM_TABLE(syn_window_table, ns_window_callbacks, "NSWindowDelegate",
   SYN_SHIM_ENTER(NSWindow, notification.object);
   void (*callback)(void *, ns_window *) =
       SYN_SHIM_FN(ns_window_callbacks, will_close);
+  if (callback != NULL) callback(syn_context, NS_OUT(ns_window, syn_sender));
+  SYN_SHIM_LEAVE();
+}
+
+- (void)windowDidMove:(NSNotification *)notification {
+  SYN_SHIM_ENTER(NSWindow, notification.object);
+  void (*callback)(void *, ns_window *) =
+      SYN_SHIM_FN(ns_window_callbacks, did_move);
+  if (callback != NULL) callback(syn_context, NS_OUT(ns_window, syn_sender));
+  SYN_SHIM_LEAVE();
+}
+
+- (void)windowDidResize:(NSNotification *)notification {
+  SYN_SHIM_ENTER(NSWindow, notification.object);
+  void (*callback)(void *, ns_window *) =
+      SYN_SHIM_FN(ns_window_callbacks, did_resize);
   if (callback != NULL) callback(syn_context, NS_OUT(ns_window, syn_sender));
   SYN_SHIM_LEAVE();
 }
@@ -184,6 +204,16 @@ void ns_window_set_initial_first_responder(ns_window *window, ns_view *view) {
 ns_view *ns_window_initial_first_responder(ns_window *window) {
   NS_ENTER();
   return NS_OUT(ns_view, NS_IN(NSWindow, window).initialFirstResponder);
+  NS_LEAVE();
+}
+
+/* NSResponder has no wrapper in v0, so a view is what crosses, the same shape
+ * setInitialFirstResponder: takes. False is AppKit's answer that the change
+ * was refused, not misuse (R12). */
+bool ns_window_make_first_responder(ns_window *window, ns_view *responder) {
+  NS_ENTER();
+  return [NS_IN(NSWindow, window)
+      makeFirstResponder:NS_IN_OPT(NSView, responder)];
   NS_LEAVE();
 }
 
