@@ -58,16 +58,60 @@ target_link_libraries(syntonic
   PUBLIC "-framework AppKit" "-framework Foundation")
 
 if(PROJECT_IS_TOP_LEVEL)
+  # The README's snippet is this file, so it has to keep compiling. A consumer
+  # adding Syntonic with add_subdirectory does not build it.
+  add_executable(hello_window "${CMAKE_CURRENT_SOURCE_DIR}/examples/hello_window.c")
+  target_link_libraries(hello_window PRIVATE syntonic syntonic_flags)
+
+  # The C twin (U12). It is a consumer: it sees the public headers and its own
+  # seed data, and nothing else. `just twin-c` bundles it under the same app
+  # name and icon set as the Swift twin so the comparison stays blind.
+  add_executable(twin_c "${CMAKE_CURRENT_SOURCE_DIR}/twins/c/main.c")
+  target_link_libraries(twin_c PRIVATE syntonic syntonic_flags)
+  # A .dSYM beside the binary is what turns a `leaks` backtrace into file and
+  # line (KTD12).
+  add_custom_command(TARGET twin_c POST_BUILD
+    COMMAND dsymutil $<TARGET_FILE:twin_c>)
+
+  # tools/axdump.m reads a running app's accessibility tree (R23). It is a
+  # tool, not a wrapper, so it talks to ApplicationServices directly.
+  add_executable(axdump "${CMAKE_CURRENT_SOURCE_DIR}/tools/axdump.m")
+  target_link_libraries(axdump PRIVATE syntonic_flags
+    "-framework ApplicationServices" "-framework AppKit")
+
   enable_testing()
+
+  # The runner and the AppKit bootstrap the suites are written against (U3).
+  # They are not tests/test_*.c, so the glob below leaves them alone; this
+  # target is what carries them, and `main` along with them.
+  add_library(syntonic_test_support STATIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/runner.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/support.m")
+  target_include_directories(syntonic_test_support PUBLIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests")
+  target_link_libraries(syntonic_test_support
+    PRIVATE syntonic_flags
+    PUBLIC syntonic)
+
   file(GLOB SYNTONIC_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_*.c")
   foreach(test_source IN LISTS SYNTONIC_TEST_SOURCES)
     cmake_path(GET test_source STEM test_name)
     add_executable(${test_name} ${test_source})
-    target_link_libraries(${test_name} PRIVATE syntonic syntonic_flags)
+    target_link_libraries(${test_name} PRIVATE syntonic_test_support syntonic_flags)
     add_test(NAME ${test_name} COMMAND ${test_name})
     # The leaks run is not instrumented, so it needs a .dSYM beside the binary
     # to turn a backtrace into file and line (KTD12).
     add_custom_command(TARGET ${test_name} POST_BUILD
       COMMAND dsymutil $<TARGET_FILE:${test_name}>)
   endforeach()
+
+  # The fixture test_runner_self spawns to prove the runner's ordinary
+  # pass/fail loop: it holds a test that fails on purpose. It is not a
+  # tests/test_*.c, so the glob above leaves it alone, and it is deliberately
+  # never add_test'd - `just test` must not run it directly.
+  add_executable(fixture_runner_loop
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixture_runner_loop.c")
+  target_link_libraries(fixture_runner_loop
+    PRIVATE syntonic_test_support syntonic_flags)
+  add_dependencies(test_runner_self fixture_runner_loop)
 endif()

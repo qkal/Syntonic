@@ -6,3 +6,4 @@ build-san/
 *.dSYM/
 .remember/
 .DS_Store
+.claude/worktrees/
