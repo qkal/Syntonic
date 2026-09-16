@@ -22,6 +22,7 @@
 #include <syntonic/ns_base.h>
 #include <syntonic/ns_button.h>
 #include <syntonic/ns_color.h>
+#include <syntonic/ns_combo_box.h>
 #include <syntonic/ns_control.h>
 #include <syntonic/ns_font.h>
 #include <syntonic/ns_grid_view.h>

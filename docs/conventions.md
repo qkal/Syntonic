@@ -715,7 +715,7 @@ required**, because every protocol v0 wraps is `@optional` in the SDK.
 | `ns_table_view_callbacks` | `NSTableViewDataSource` + `NSTableViewDelegate` (merged) | `number_of_rows`, `cell_string` | `selection_did_change` | — | U8 ✓ |
 | `ns_outline_view_callbacks` | `NSOutlineViewDataSource` + `NSOutlineViewDelegate` (merged) | `number_of_children_of_item`, `child_of_item`, `is_item_expandable`, `cell_string` | `cell_symbol_name`, `should_expand_item`, `should_collapse_item`, `is_group_item`, `should_select_item`, `selection_did_change` | — | U8 ✓ |
 | `ns_toolbar_callbacks` | `NSToolbarDelegate` | `item_for_item_identifier_will_be_inserted_into_toolbar` | — | `toolbarDefaultItemIdentifiers:`, `toolbarAllowedItemIdentifiers:` — the wrapper answers both from C string arrays passed to `ns_toolbar_set_callbacks` by pointer plus count, and **deep-copied there**, which is the one exception to KTD17's borrow rule (see below) | U9 ✓ |
-| `ns_combo_box_callbacks` | `NSComboBoxDataSource` + `NSComboBoxDelegate` (merged; embeds `ns_text_field_callbacks` first, because `NSComboBoxDelegate` inherits `NSTextFieldDelegate`) | `number_of_items`, `object_value_for_item_at_index` | `index_of_item_with_string_value`, `completed_string`, `selection_did_change`, `selection_is_changing`, `will_pop_up`, `will_dismiss` | — | U13 |
+| `ns_combo_box_callbacks` | `NSComboBoxDataSource` + `NSComboBoxDelegate` (merged; embeds `ns_text_field_callbacks` first, because `NSComboBoxDelegate` inherits `NSTextFieldDelegate`) | `number_of_items`, `object_value_for_item_at_index` | `index_of_item_with_string_value`, `completed_string`, `selection_did_change`, `selection_is_changing`, `will_pop_up`, `will_dismiss` | — | U13 ✓ |
 
 A ✓ in the unit column means the row was checked against the shipped struct.
 
@@ -895,10 +895,19 @@ function and the violated rule, then stop.
 ### The index check
 
 `NS_CHECK_INDEX(index, largest)` in `src/ns_internal.h` is that check for an
-index, and it is the only extra one a wrapper writes by hand. `largest` is the
+index, and the one a wrapper reaches for most often. `largest` is the
 largest index **this call** accepts, which is not the same number for every
 call: an insert accepts the count, because the count appends, while an accessor
 accepts the count minus one.
+
+It is not the only check a wrapper writes by hand. Where the receiver's own
+state decides whether a call means anything at all, the wrapper writes its own
+in the same shape — a static function in its `.m` behind `#ifndef NDEBUG` that
+prints the function, the state and the rule, then stops. `NSComboBox` is the
+first: its `usesDataSource` switches the class between two exclusive lists, and
+a call meant for the other one is answered from the list the combo box is not
+showing, with nothing but a console line to say so. `src/ns_combo_box.m` holds
+that check and `tests/test_combo_box.c` pins both directions of it.
 
 ```c
 void ns_menu_insert_item_at_index(ns_menu *menu, ns_menu_item *item,
@@ -1106,8 +1115,13 @@ and one `ns_combo_box_set_callbacks` installer written the way
 table, a `SynComboBoxShim`, and one `SYN_SHIM_INSTALL`. Then **add a row to
 [Required members per protocol](#required-members-per-protocol)** naming every
 required and optional member. Check the SDK for an `assign` delegate slot —
-`NSComboBox.dataSource` is `assign`, so uninstalling before release is what keeps
-AppKit from reading freed memory.
+`NSComboBox.dataSource` is one, and AppKit neither retains it nor zeroes it.
+The machinery already covers that: the shim is held by the object it serves, so
+it cannot die first, and install, replace and uninstall each assign the AppKit
+slot before the previous shim is released. What the wrapper owes an `assign`
+slot is therefore only that the install block assigns it like any other slot, so
+that a null struct leaves nil there rather than an address. A caller needs no
+uninstall before `ns_release`; `tests/test_combo_box.c` pins both halves.
 
 ### 11. Add the header to the umbrella
 
@@ -1192,7 +1206,7 @@ named section in its own commit; nothing else in the document moves.
 | U12 gaps ✓ | landed, the three things the C twin needed that no unit had wrapped: NSGridRow, NSGridColumn and NSGridCell in `ns_grid_view.h`, whose five child accessors are the new row on the [borrowed-return allowlist](#the-mechanical-rule-read-the-sdk-propertys-attribute) - none of the three is a view, so none has an upcast, and none needs [the index check](#the-index-check) because AppKit raises cleanly and changes nothing first; `cell_symbol_name` in the outline's row above, which is the first case of **two struct members feeding one selector**, so `respondsToSelector:` now answers yes when any member of a selector is set rather than the first; `lineBreakMode` on `ns_control`, not on `ns_text_field`, because `NSControl.h` is what declares it. Two things decided in the headers rather than here: an `NSRange` argument crosses as its location and length, two `long`s, because Foundation's `NSRange.h` is not includable from C; `+[NSGridCell emptyContentView]` is a `strong` class property and therefore borrowed, needing no allowlist row |
 | U9 | the toolbar row, including the dropped identifier methods |
 | U10 ✓ | landed, all three settled by rules already here: a constructor belongs to the concrete class even when the SDK header declares no initializer of its own, as `ns_view_controller_create` already showed and `ns_tab_view_controller_create` repeats; a nil AppKit documents is an answer, not misuse, so `+[NSImage imageWithSystemSymbolName:accessibilityDescription:]` crosses its nil as null rather than aborting (R12 checks misuse, not results); and `-[NSTabViewController setSelectedTabViewItemIndex:]` takes [the index check](#the-index-check) because AppKit is clean on neither side of the range - a negative index selects the first tab silently, and the exception past the end names a range that includes the index it rejected. No per-protocol row and no post-init fixup: `NSTabViewController` is its own tab view's and toolbar's delegate and Syntonic wraps neither protocol, and none of `NSTabViewController`, `NSTabViewItem` or `NSImage` needs a line after construction |
-| U13 | the combo box row, confirmed against the shipped wrapper — the row is pre-filled from the SDK header so the author has a source |
+| U13 ✓ | landed: the combo box row of the per-protocol table, confirmed against the shipped struct, and with it the embedded-parent rule's first consumer — `text_field.did_change` is the first member a shim table names by a path into a parent struct; the **wrapper's own check** in [The index check](#the-index-check), which is the first one that is not an index, because `NSComboBox` keeps two exclusive lists and answers a call meant for the other one from the list it is not showing, logging a console line a C caller never sees; the `assign` data source slot, which step 10 of [How to wrap a new class](#how-to-wrap-a-new-class) now states narrowly — the machinery already keeps the slot from outliving its shim, so the wrapper owes it nothing but the ordinary assignment in the install block, and a caller needs no uninstall before `ns_release`. Three things the document was silent on, decided in the header rather than here: AppKit's `NSNotFound` crosses as **-1**, in both directions, because the boundary already spells "no index" that way and a C caller cannot write `NSIntegerMax` without Foundation; `-[NSComboBox objectValues]` gets no pair of its own, because `numberOfItems` and `itemObjectValueAtIndex:` are already the count function and the index accessor the array-out rule asks for and a second spelling of one property is what the upcast rule forbids; the four `NSComboBox…Notification` constants are not exported, because v0 wraps no notification centre and the four delegate members are the whole of what they carry. One consequence worth knowing rather than rediscovering: **a combo box on the static list cannot install the struct at all**, since the merged struct's two data source members are required and so an install is a data source install — a static combo box hears a pick through `ns_control_set_action` on its control upcast, the same commit point a text field uses (R17). No post-init fixup, and no borrowed-return allowlist row: every borrowed return here is an upcast |
 | U11 | whatever the README checkpoint's feedback changes; after U11 a change here is a public change |
 
 Rows in the per-protocol table are pre-filled from the SDK and the plan. A unit

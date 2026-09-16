@@ -214,6 +214,37 @@ bool syn_test_delegate_responds(const void *handle, const char *selector) {
   }
 }
 
+bool syn_test_has_data_source(const void *handle) {
+  @autoreleasepool {
+    id object = (__bridge id)(void *)handle;
+    return ((id (*)(id, SEL))objc_msgSend)(object, @selector(dataSource)) !=
+           nil;
+  }
+}
+
+long syn_test_combo_box_index_of_string_value(const void *handle,
+                                              const char *value) {
+  @autoreleasepool {
+    NSComboBox *combo_box = (__bridge NSComboBox *)(void *)handle;
+    id source = combo_box.dataSource;
+    SEL question = @selector(comboBox:indexOfItemWithStringValue:);
+    if (source == nil || ![source respondsToSelector:question]) return -1;
+    NSUInteger index = ((NSUInteger(*)(id, SEL, id, id))objc_msgSend)(
+        source, question, combo_box, @(value));
+    return index == NSNotFound ? -1 : (long)index;
+  }
+}
+
+char *syn_test_combo_box_completed_string(const void *handle,
+                                          const char *prefix) {
+  @autoreleasepool {
+    NSComboBox *combo_box = (__bridge NSComboBox *)(void *)handle;
+    NSString *completed = [(NSComboBoxCell *)combo_box.cell
+        completedString:@(prefix)];
+    return completed != nil ? strdup(completed.UTF8String) : NULL;
+  }
+}
+
 bool syn_test_delegate_answers_about_row(const void *handle,
                                          const char *selector, long row) {
   @autoreleasepool {
