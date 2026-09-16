@@ -143,6 +143,37 @@ void ns_window_make_key_and_order_front(ns_window *_Nonnull window)
  * handle stays valid and ns_release is what tears the tree down (KTD7, F3). */
 void ns_window_close(ns_window *_Nonnull window) API_AVAILABLE(macos(26.0));
 
+/* -[NSWindow setInitialFirstResponder:] - the view that holds focus the first
+ * time the window is made key, and where an explicit Tab chain starts (R19). */
+void ns_window_set_initial_first_responder(ns_window *_Nonnull window,
+                                           ns_view *_Nullable view)
+    API_AVAILABLE(macos(26.0));
+
+/* -[NSWindow initialFirstResponder] - a weak property, so this is borrowed:
+ * valid while the view tree holds it, kept longer with ns_retain (R7). */
+ns_view *_Nullable ns_window_initial_first_responder(
+    ns_window *_Nonnull window) API_AVAILABLE(macos(26.0));
+
+/* -[NSWindow setAutorecalculatesKeyViewLoop:] - whether AppKit rebuilds the
+ * key view loop from the view tree rather than leaving the chain
+ * ns_view_set_next_key_view built. Turn it off before chaining Tab by hand,
+ * which is what a window with no nib does (R19).
+ *
+ * What the flag actually buys on macOS 27 is less than its name suggests, and
+ * tests/test_layout.c pins the measurement: a chain set on an off-screen
+ * window survives with the flag either way, and a rebuild - whether
+ * ns_window_recalculate_key_view_loop asks for one or making the window key
+ * does - replaces the chain with the flag either way. Set it off as the twins
+ * do, and do not rely on it to hold a chain across a rebuild. */
+void ns_window_set_autorecalculates_key_view_loop(ns_window *_Nonnull window,
+                                                  bool autorecalculates)
+    API_AVAILABLE(macos(26.0));
+
+/* -[NSWindow recalculateKeyViewLoop] - rebuilds the key view loop from the
+ * view tree now, replacing any chain set with ns_view_set_next_key_view. */
+void ns_window_recalculate_key_view_loop(ns_window *_Nonnull window)
+    API_AVAILABLE(macos(26.0));
+
 /* Installs the callbacks struct as the window's delegate. The struct is
  * copied; `context` is not, and has to stay valid until you uninstall or the
  * window is deallocated - ns_release does not uninstall. Installing again

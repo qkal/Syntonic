@@ -127,6 +127,35 @@ void ns_window_close(ns_window *window) {
   NS_LEAVE();
 }
 
+void ns_window_set_initial_first_responder(ns_window *window, ns_view *view) {
+  NS_ENTER();
+  NS_IN(NSWindow, window).initialFirstResponder = NS_IN_OPT(NSView, view);
+  NS_LEAVE();
+}
+
+/* Borrowed: `initialFirstResponder` is a weak property, which is the shape
+ * NS_OUT is right for (R7). */
+ns_view *ns_window_initial_first_responder(ns_window *window) {
+  NS_ENTER();
+  return NS_OUT(ns_view, NS_IN(NSWindow, window).initialFirstResponder);
+  NS_LEAVE();
+}
+
+/* R19: the flag a window with no nib turns off before chaining Tab by hand.
+ * What it holds is narrower than its name; tests/test_layout.c pins it. */
+void ns_window_set_autorecalculates_key_view_loop(ns_window *window,
+                                                  bool autorecalculates) {
+  NS_ENTER();
+  NS_IN(NSWindow, window).autorecalculatesKeyViewLoop = autorecalculates;
+  NS_LEAVE();
+}
+
+void ns_window_recalculate_key_view_loop(ns_window *window) {
+  NS_ENTER();
+  [NS_IN(NSWindow, window) recalculateKeyViewLoop];
+  NS_LEAVE();
+}
+
 void ns_window_set_callbacks(ns_window *window,
                              const ns_window_callbacks *callbacks,
                              void *context) {

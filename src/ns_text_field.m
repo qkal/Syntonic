@@ -77,6 +77,21 @@ char *ns_text_field_copy_placeholder_string(ns_text_field *text_field) {
   NS_LEAVE();
 }
 
+void ns_text_field_set_text_color(ns_text_field *text_field, ns_color *color) {
+  NS_ENTER();
+  NS_IN(NSTextField, text_field).textColor = NS_IN_OPT(NSColor, color);
+  NS_LEAVE();
+}
+
+/* `textColor` is a copy property, so the value is owned and the name says
+ * copy_ (R7, KTD7). An immutable NSColor copies to itself, so the handle that
+ * comes back is the shared colour that went in. */
+ns_color *ns_text_field_copy_text_color(ns_text_field *text_field) {
+  NS_ENTER();
+  return NS_OUT_OWNED(ns_color, NS_IN(NSTextField, text_field).textColor);
+  NS_LEAVE();
+}
+
 void ns_text_field_set_callbacks(ns_text_field *text_field,
                                  const ns_text_field_callbacks *callbacks,
                                  void *context) {

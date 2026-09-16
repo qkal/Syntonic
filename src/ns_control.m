@@ -51,6 +51,20 @@ bool ns_control_send_action(ns_control *control) {
   NS_LEAVE();
 }
 
+void ns_control_set_font(ns_control *control, ns_font *font) {
+  NS_ENTER();
+  NS_IN(NSControl, control).font = NS_IN_OPT(NSFont, font);
+  NS_LEAVE();
+}
+
+/* `font` is a copy property, so the value is owned and the name says copy_
+ * (R7, KTD7). */
+ns_font *ns_control_copy_font(ns_control *control) {
+  NS_ENTER();
+  return NS_OUT_OWNED(ns_font, NS_IN(NSControl, control).font);
+  NS_LEAVE();
+}
+
 /* The trampoline is installed, replaced and uninstalled by one call; the block
  * is where this class's target and action slots live (R9). */
 void ns_control_set_action(ns_control *control, ns_action action,

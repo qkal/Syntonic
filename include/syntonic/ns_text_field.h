@@ -34,10 +34,12 @@ extern "C" {
 /* The handle. One opaque struct type per AppKit class (R4, KTD9). */
 typedef struct ns_text_field ns_text_field;
 
-/* Declared by ns_control.h and ns_view.h and repeated here so this header
- * stands alone. C has allowed a repeated typedef of the same type since C11. */
+/* Declared by ns_control.h, ns_view.h and ns_color.h and repeated here so this
+ * header stands alone. C has allowed a repeated typedef of the same type since
+ * C11. */
 typedef struct ns_control ns_control;
 typedef struct ns_view ns_view;
+typedef struct ns_color ns_color;
 
 /*
  * NSTextFieldDelegate, as a struct of function pointers. Every member is
@@ -84,6 +86,19 @@ void ns_text_field_set_placeholder_string(ns_text_field *_Nonnull text_field,
 /* -[NSTextField placeholderString] - a copy property, so this is an owned copy
  * the caller frees with ns_string_free (R7, R11). */
 char *_Nullable ns_text_field_copy_placeholder_string(
+    ns_text_field *_Nonnull text_field) API_AVAILABLE(macos(26.0));
+
+/* -[NSTextField setTextColor:] - the colour the field's text is drawn in. Pass
+ * one of ns_color.h's semantic colours so it follows the system appearance;
+ * null restores AppKit's own default. The field copies the colour, so the
+ * shared one stays shared. */
+void ns_text_field_set_text_color(ns_text_field *_Nonnull text_field,
+                                  ns_color *_Nullable color)
+    API_AVAILABLE(macos(26.0));
+
+/* -[NSTextField textColor] - `textColor` is a copy property, so this is owned:
+ * release it with ns_release (R7). */
+ns_color *_Nullable ns_text_field_copy_text_color(
     ns_text_field *_Nonnull text_field) API_AVAILABLE(macos(26.0));
 
 /* Installs the callbacks struct as the field's delegate. The struct is copied;
