@@ -22,10 +22,13 @@
 #include <syntonic/ns_base.h>
 #include <syntonic/ns_button.h>
 #include <syntonic/ns_control.h>
+#include <syntonic/ns_image.h>
 #include <syntonic/ns_menu.h>
 #include <syntonic/ns_menu_bar.h>
 #include <syntonic/ns_menu_item.h>
 #include <syntonic/ns_pop_up_button.h>
+#include <syntonic/ns_tab_view_controller.h>
+#include <syntonic/ns_tab_view_item.h>
 #include <syntonic/ns_text_field.h>
 #include <syntonic/ns_view.h>
 #include <syntonic/ns_view_controller.h>
