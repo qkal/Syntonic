@@ -25,22 +25,23 @@
 #include <syntonic/ns_control.h>
 #include <syntonic/ns_font.h>
 #include <syntonic/ns_grid_view.h>
+#include <syntonic/ns_image.h>
 #include <syntonic/ns_layout.h>
 #include <syntonic/ns_menu.h>
 #include <syntonic/ns_menu_bar.h>
 #include <syntonic/ns_menu_item.h>
+#include <syntonic/ns_outline_view.h>
 #include <syntonic/ns_pop_up_button.h>
+#include <syntonic/ns_scroll_view.h>
 #include <syntonic/ns_stack_view.h>
+#include <syntonic/ns_tab_view_controller.h>
+#include <syntonic/ns_tab_view_item.h>
+#include <syntonic/ns_table_column.h>
+#include <syntonic/ns_table_view.h>
 #include <syntonic/ns_text_field.h>
 #include <syntonic/ns_view.h>
 #include <syntonic/ns_view_controller.h>
 #include <syntonic/ns_window.h>
-/* U8's four headers, appended as one block rather than interleaved, so the
- * units landing beside it merge without touching each other's lines. */
-#include <syntonic/ns_outline_view.h>
-#include <syntonic/ns_scroll_view.h>
-#include <syntonic/ns_table_column.h>
-#include <syntonic/ns_table_view.h>
 
 #ifdef __cplusplus
 extern "C" {
