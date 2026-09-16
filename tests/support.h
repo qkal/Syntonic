@@ -59,6 +59,42 @@ void syn_test_schedule_flag(double delay_ms, bool *flag);
  * from an abort case or from behind a handler that catches. */
 void syn_test_raise_in_wrapper(void);
 
+/* ---- plain objects and checked shims for the kernel suite (U4) ---- */
+
+/* True when the calling thread is the main thread (R10). */
+bool syn_test_is_main_thread(void);
+
+/* Owned (+1) handles to plain objects, for the ownership and class checks.
+ * Release each one with ns_release. NSButton is an NSView subclass, NSDate is
+ * unrelated to both, and NSString backs the outbound string copy. */
+const void *syn_test_view_create(void);
+const void *syn_test_button_create(void);
+const void *syn_test_date_create(void);
+const void *syn_test_string_create(const char *utf8);
+
+/* True once the object the last syn_test_view_create handed out has
+ * deallocated, so a C test can watch the last reference go (R7). */
+bool syn_test_view_is_gone(void);
+
+/* Shims written with the library's own internal macros, so a C test can drive
+ * the debug checks that every wrapper body carries (KTD4, R12). These two take
+ * the handle at an NSView position, non-null and nullable in turn. */
+void syn_test_expect_view(const void *handle);
+void syn_test_expect_view_optional(const void *handle);
+
+/* The library's inbound string conversion at a non-null and at a nullable
+ * position; each reports whether the conversion produced nil. */
+bool syn_test_string_in_is_nil(const char *utf8);
+bool syn_test_string_in_optional_is_nil(const char *utf8);
+
+/* The library's outbound string copy of the NSString behind `handle`. Owned:
+ * free it with ns_string_free (R11). */
+char *syn_test_string_copy(const void *handle);
+
+/* A wrapper built with the library's entry macro that raises inside the call,
+ * so the entry macro's exception report is what gets tested (KTD4). */
+void syn_test_wrapper_raises(void);
+
 typedef struct {
   bool aborted;      /* terminated by SIGABRT */
   bool timed_out;    /* killed after the wait expired */

@@ -16,6 +16,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <syntonic/ns_base.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif

@@ -15,6 +15,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "../src/ns_internal.h"
 #include "support.h"
 
 /* A hung abort case fails the suite instead of hanging CTest. */
@@ -82,6 +83,87 @@ void syn_test_raise_in_wrapper(void) {
   syn_test_bootstrap();
   NSView *view = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 10, 10)];
   [view addSubview:view]; /* NSInvalidArgumentException: can't add self */
+}
+
+/* ---- plain objects and checked shims for the kernel suite (U4) ---- */
+
+/* Weak, so a C test can see the object go without holding it alive. Reading a
+ * weak variable autoreleases the object it yields, so every read below sits in
+ * a pool of its own - otherwise the read itself would keep the object past the
+ * release under test. */
+static __weak NSView *syn_last_view;
+
+bool syn_test_is_main_thread(void) {
+  return [NSThread isMainThread];
+}
+
+const void *syn_test_view_create(void) {
+  @autoreleasepool {
+    NSView *view = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 10, 10)];
+    syn_last_view = view;
+    return CFBridgingRetain(view);
+  }
+}
+
+const void *syn_test_button_create(void) {
+  @autoreleasepool {
+    return CFBridgingRetain(
+        [[NSButton alloc] initWithFrame:NSMakeRect(0, 0, 10, 10)]);
+  }
+}
+
+const void *syn_test_date_create(void) {
+  @autoreleasepool {
+    return CFBridgingRetain([NSDate date]);
+  }
+}
+
+const void *syn_test_string_create(const char *utf8) {
+  @autoreleasepool {
+    return CFBridgingRetain([NSString stringWithUTF8String:utf8]);
+  }
+}
+
+bool syn_test_view_is_gone(void) {
+  @autoreleasepool {
+    return syn_last_view == nil;
+  }
+}
+
+void syn_test_expect_view(const void *handle) {
+  NS_ENTER();
+  (void)NS_IN(NSView, handle);
+  NS_LEAVE();
+}
+
+void syn_test_expect_view_optional(const void *handle) {
+  NS_ENTER();
+  (void)NS_IN_OPT(NSView, handle);
+  NS_LEAVE();
+}
+
+bool syn_test_string_in_is_nil(const char *utf8) {
+  NS_ENTER();
+  return NS_STRING_IN(utf8) == nil;
+  NS_LEAVE();
+}
+
+bool syn_test_string_in_optional_is_nil(const char *utf8) {
+  NS_ENTER();
+  return NS_STRING_IN_OPT(utf8) == nil;
+  NS_LEAVE();
+}
+
+char *syn_test_string_copy(const void *handle) {
+  NS_ENTER();
+  return NS_STRING_OUT(NS_IN(NSString, handle));
+  NS_LEAVE();
+}
+
+void syn_test_wrapper_raises(void) {
+  NS_ENTER();
+  syn_test_raise_in_wrapper();
+  NS_LEAVE();
 }
 
 static char *syn_copy_string(const char *text) {
