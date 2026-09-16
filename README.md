@@ -122,8 +122,8 @@ build, not to bundle, not to sign.
 **Build and run the example.**
 
 ```sh
-git clone https://github.com/<owner>/syntonic.git
-cd syntonic
+git clone https://github.com/qkal/Syntonic.git
+cd Syntonic
 just build              # configures and builds the library, the example and the tests
 ./build/hello_window    # a window appears; close it to quit
 ```

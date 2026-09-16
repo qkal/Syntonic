@@ -14,11 +14,11 @@ generator plans — nothing downstream waits on it.
 |---|---|
 | Date | _not published yet_ |
 | Commit | _fill in at push_ |
-| Repository | _fill in at push_ |
+| Repository | `qkal/Syntonic` (private at first push) |
 | Announced at | _none, or the threads the link was posted to_ |
 
-Before pushing, replace `<owner>` in the README's `git clone` line with the real
-repository owner.
+The README's clone line points at `qkal/Syntonic`. The repository is private as
+of the first push, so "published" below means made public, not merely pushed.
 
 ## Responses
 
