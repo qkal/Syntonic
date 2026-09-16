@@ -16,7 +16,7 @@
  * and the same two lines of scaffolding hold for every return shape. Which
  * outbound macro to use is the ownership rule (R7, KTD7), not a preference:
  *
- *     ns_view *ns_window_get_content_view(ns_window *window) {   // borrowed
+ *     ns_view *ns_window_content_view(ns_window *window) {   // borrowed
  *       NS_ENTER();
  *       return NS_OUT(ns_view, NS_IN(NSWindow, window).contentView);
  *       NS_LEAVE();
