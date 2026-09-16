@@ -65,6 +65,19 @@ ns_font *ns_control_copy_font(ns_control *control) {
   NS_LEAVE();
 }
 
+void ns_control_set_line_break_mode(ns_control *control,
+                                    ns_line_break_mode line_break_mode) {
+  NS_ENTER();
+  NS_IN(NSControl, control).lineBreakMode = (NSLineBreakMode)line_break_mode;
+  NS_LEAVE();
+}
+
+ns_line_break_mode ns_control_line_break_mode(ns_control *control) {
+  NS_ENTER();
+  return (ns_line_break_mode)NS_IN(NSControl, control).lineBreakMode;
+  NS_LEAVE();
+}
+
 /* The trampoline is installed, replaced and uninstalled by one call; the block
  * is where this class's target and action slots live (R9). */
 void ns_control_set_action(ns_control *control, ns_action action,

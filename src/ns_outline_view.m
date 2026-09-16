@@ -99,6 +99,11 @@ SYN_SHIM_TABLE(syn_outline_view_table, ns_outline_view_callbacks,
                                  "outlineView:isItemExpandable:"),
                SYN_SHIM_REQUIRED(ns_outline_view_callbacks, cell_string,
                                  "outlineView:viewForTableColumn:item:"),
+               /* The second member feeding the cell selector: the shim answers
+                * respondsToSelector: yes when either is set, and cell_string
+                * is required, so an outline with no icons is unchanged. */
+               SYN_SHIM_OPTIONAL(ns_outline_view_callbacks, cell_symbol_name,
+                                 "outlineView:viewForTableColumn:item:"),
                SYN_SHIM_OPTIONAL(ns_outline_view_callbacks, should_expand_item,
                                  "outlineView:shouldExpandItem:"),
                SYN_SHIM_OPTIONAL(ns_outline_view_callbacks,
@@ -159,8 +164,9 @@ SYN_SHIM_TABLE(syn_outline_view_table, ns_outline_view_callbacks,
   SYN_SHIM_LEAVE();
 }
 
-/* KTD6: the struct supplies one borrowed string and the wrapper owns the
- * view. */
+/* KTD6: the struct supplies one borrowed string, optionally a second one for
+ * the row's icon, and the wrapper owns the view. Both strings are copied
+ * before this method returns. */
 - (NSView *)outlineView:(NSOutlineView *)outlineView
      viewForTableColumn:(NSTableColumn *)tableColumn
                    item:(id)item {
@@ -171,7 +177,17 @@ SYN_SHIM_TABLE(syn_outline_view_table, ns_outline_view_callbacks,
   const char *text = callback(syn_context, NS_OUT(ns_outline_view, syn_sender),
                               syn_outline_pointer(item));
   SYN_SHIM_CHECK_NONNULL(syn_outline_view_table, cell_string, text);
-  return syn_cell_view(outlineView, tableColumn, text);
+
+  /* Null is an answer here, not a report: a row with no icon - a group
+   * heading - is what the member says so with. */
+  const char *(*symbol_callback)(void *, ns_outline_view *, const void *) =
+      SYN_SHIM_FN(ns_outline_view_callbacks, cell_symbol_name);
+  const char *symbol =
+      symbol_callback != NULL
+          ? symbol_callback(syn_context, NS_OUT(ns_outline_view, syn_sender),
+                            syn_outline_pointer(item))
+          : NULL;
+  return syn_cell_view(outlineView, tableColumn, text, symbol);
   SYN_SHIM_LEAVE();
 }
 

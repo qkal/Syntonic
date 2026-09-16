@@ -194,6 +194,174 @@ SYN_TEST(an_empty_grid_reports_no_rows_and_a_short_row_is_allowed) {
   ns_release(grid);
 }
 
+/* ---- the grid's rows, columns and cells (KTD3, R7, R17) ---- */
+
+/* The detail pane's own shape: an empty grid of two columns, filled a row at a
+ * time, with a merged header row and an empty first column under it. */
+SYN_TEST(a_grid_made_by_columns_and_rows_counts_the_rows_added_to_it) {
+  syn_test_bootstrap();
+  ns_grid_view *grid = ns_grid_view_create_with_number_of_columns_rows(2, 0);
+  SYN_ASSERT_STR_EQ(syn_test_class_name(grid), "NSGridView");
+  SYN_ASSERT_MSG(ns_grid_view_number_of_rows(grid) == 0 &&
+                     ns_grid_view_number_of_columns(grid) == 2,
+                 "the empty grid reported %ldx%ld",
+                 ns_grid_view_number_of_rows(grid),
+                 ns_grid_view_number_of_columns(grid));
+
+  ns_text_field *header = ns_text_field_create_label_with_string("Details");
+  ns_view *header_row[] = {ns_text_field_as_view(header)};
+  ns_grid_row *row = ns_grid_view_add_row_with_views(grid, header_row, 1);
+  SYN_ASSERT_MSG(row != NULL, "adding a row handed back nothing");
+  SYN_ASSERT_STR_EQ(syn_test_class_name(row), "NSGridRow");
+  /* The row is the grid's own, so the accessor answers with the same one. */
+  SYN_ASSERT_MSG(ns_grid_view_row_at_index(grid, 0) == row,
+                 "the row accessor did not answer with the added row");
+
+  ns_text_field *label = ns_text_field_create_label_with_string("Title:");
+  ns_text_field *field = ns_text_field_create_with_string("Kernel rewrite");
+  ns_view *field_row[] = {ns_text_field_as_view(label),
+                          ns_text_field_as_view(field)};
+  ns_grid_view_add_row_with_views(grid, field_row, 2);
+
+  SYN_ASSERT_MSG(ns_grid_view_number_of_rows(grid) == 2 &&
+                     ns_grid_view_number_of_columns(grid) == 2,
+                 "the filled grid reported %ldx%ld",
+                 ns_grid_view_number_of_rows(grid),
+                 ns_grid_view_number_of_columns(grid));
+
+  ns_release(header);
+  ns_release(label);
+  ns_release(field);
+  ns_release(grid);
+}
+
+/* What AppKit actually does with the marker: it never becomes the cell's
+ * content view, so the cell reports nothing at all. */
+SYN_TEST(a_cell_built_from_the_empty_content_view_holds_no_content_view) {
+  syn_test_bootstrap();
+  ns_grid_view *grid = ns_grid_view_create_with_number_of_columns_rows(2, 0);
+
+  ns_view *empty = ns_grid_cell_empty_content_view();
+  SYN_ASSERT_MSG(empty != NULL, "the empty content view is null");
+  /* One view for the life of the process, which is what lets a form pass it in
+   * several positions (R7). */
+  SYN_ASSERT_MSG(empty == ns_grid_cell_empty_content_view(),
+                 "the empty content view is not the same view twice");
+
+  ns_button *checkbox = ns_button_create_checkbox_with_title("Flagged");
+  ns_view *row[] = {empty, ns_button_as_view(checkbox)};
+  ns_grid_view_add_row_with_views(grid, row, 2);
+
+  ns_grid_cell *blank = ns_grid_view_cell_at_column_index_row_index(grid, 0, 0);
+  SYN_ASSERT_STR_EQ(syn_test_class_name(blank), "NSGridCell");
+  SYN_ASSERT_MSG(ns_grid_cell_content_view(blank) == NULL,
+                 "a cell built from the marker reported a content view");
+
+  ns_grid_cell *filled =
+      ns_grid_view_cell_at_column_index_row_index(grid, 1, 0);
+  SYN_ASSERT_MSG(ns_grid_cell_content_view(filled) ==
+                     ns_button_as_view(checkbox),
+                 "the second cell does not hold the checkbox");
+
+  /* The setter is the other half of the same property, and it takes a view no
+   * other cell is managing. */
+  ns_view *late = syn_view(20, 20);
+  ns_grid_cell_set_content_view(blank, late);
+  SYN_ASSERT_MSG(ns_grid_cell_content_view(blank) == late,
+                 "setting a cell's content view did not take");
+  ns_grid_cell_set_content_view(blank, NULL);
+  SYN_ASSERT_MSG(ns_grid_cell_content_view(blank) == NULL,
+                 "clearing a cell's content view did not take");
+  ns_release(late);
+
+  ns_release(checkbox);
+  ns_release(grid);
+}
+
+/* The merged header row: every index inside the range answers with one cell. */
+SYN_TEST(merging_a_rows_cells_makes_the_whole_range_one_cell) {
+  syn_test_bootstrap();
+  ns_grid_view *grid = ns_grid_view_create_with_number_of_columns_rows(2, 0);
+  ns_text_field *header = ns_text_field_create_label_with_string("Details");
+  ns_view *header_row[] = {ns_text_field_as_view(header)};
+  ns_grid_view_add_row_with_views(grid, header_row, 1);
+
+  SYN_ASSERT_MSG(ns_grid_view_cell_at_column_index_row_index(grid, 0, 0) !=
+                     ns_grid_view_cell_at_column_index_row_index(grid, 1, 0),
+                 "the two cells were one before the merge");
+
+  ns_grid_row_merge_cells_in_range(ns_grid_view_row_at_index(grid, 0), 0, 2);
+  SYN_ASSERT_MSG(ns_grid_view_cell_at_column_index_row_index(grid, 0, 0) ==
+                     ns_grid_view_cell_at_column_index_row_index(grid, 1, 0),
+                 "the merged range still reads as two cells");
+  /* Merging changes no coordinate: the grid is still two columns wide. */
+  SYN_ASSERT_MSG(ns_grid_view_number_of_columns(grid) == 2,
+                 "the merge changed the column count to %ld",
+                 ns_grid_view_number_of_columns(grid));
+
+  ns_release(header);
+  ns_release(grid);
+}
+
+/* Placement and width round-trip, and the two accessors agree about which cell
+ * a view landed in. */
+SYN_TEST(a_columns_placement_and_width_round_trip_and_find_their_cells) {
+  syn_test_bootstrap();
+  ns_grid_view *grid = ns_grid_view_create_with_number_of_columns_rows(2, 0);
+  ns_text_field *label = ns_text_field_create_label_with_string("Title:");
+  ns_text_field *field = ns_text_field_create_with_string("Kernel rewrite");
+  ns_view *row[] = {ns_text_field_as_view(label), ns_text_field_as_view(field)};
+  ns_grid_view_add_row_with_views(grid, row, 2);
+
+  ns_grid_column *first = ns_grid_view_column_at_index(grid, 0);
+  ns_grid_column *second = ns_grid_view_column_at_index(grid, 1);
+  SYN_ASSERT_STR_EQ(syn_test_class_name(first), "NSGridColumn");
+  /* AppKit's own default on a column is to inherit the grid's placement. */
+  SYN_ASSERT_MSG(ns_grid_column_x_placement(first) ==
+                     NS_GRID_CELL_PLACEMENT_INHERITED,
+                 "a new column started on placement %ld",
+                 (long)ns_grid_column_x_placement(first));
+
+  ns_grid_column_set_x_placement(first, NS_GRID_CELL_PLACEMENT_TRAILING);
+  ns_grid_column_set_x_placement(second, NS_GRID_CELL_PLACEMENT_LEADING);
+  ns_grid_column_set_width(second, 220);
+  SYN_ASSERT(ns_grid_column_x_placement(first) ==
+             NS_GRID_CELL_PLACEMENT_TRAILING);
+  SYN_ASSERT(ns_grid_column_x_placement(second) ==
+             NS_GRID_CELL_PLACEMENT_LEADING);
+  SYN_ASSERT_MSG(ns_grid_column_width(second) == 220,
+                 "the column width read back as %g",
+                 ns_grid_column_width(second));
+
+  /* cellForView: finds the cell a view was placed in, and the two accessors
+   * answer with the same cell. */
+  ns_grid_cell *cell =
+      ns_grid_view_cell_for_view(grid, ns_text_field_as_view(field));
+  SYN_ASSERT_MSG(cell != NULL, "cellForView found no cell for the field");
+  SYN_ASSERT_MSG(cell == ns_grid_view_cell_at_column_index_row_index(grid, 1, 0),
+                 "the field is not in the cell the indexes report");
+  SYN_ASSERT_MSG(ns_grid_cell_row(cell) == ns_grid_view_row_at_index(grid, 0),
+                 "the cell does not report the row it is in");
+  SYN_ASSERT_MSG(ns_grid_cell_column(cell) == second,
+                 "the cell does not report the column it is in");
+
+  ns_grid_cell_set_x_placement(cell, NS_GRID_CELL_PLACEMENT_FILL);
+  SYN_ASSERT_MSG(ns_grid_cell_x_placement(cell) == NS_GRID_CELL_PLACEMENT_FILL,
+                 "the cell placement read back as %ld",
+                 (long)ns_grid_cell_x_placement(cell));
+
+  /* A view in no cell of this grid has no cell, which is an answer and not
+   * misuse (R12). */
+  ns_view *stranger = syn_view(20, 20);
+  SYN_ASSERT_MSG(ns_grid_view_cell_for_view(grid, stranger) == NULL,
+                 "a view outside the grid was reported in a cell");
+  ns_release(stranger);
+
+  ns_release(label);
+  ns_release(field);
+  ns_release(grid);
+}
+
 /* ---- edge pinning (KTD3, KTD18) ---- */
 
 /* The unit's acceptance: a pinned view matches its superview's bounds, and
@@ -312,6 +480,63 @@ SYN_TEST(tearing_down_a_window_holding_a_stack_and_a_grid_leaves_nothing) {
   SYN_ASSERT_MSG(ns_view_subview_count(content) == 2,
                  "the content view holds %ld subviews",
                  ns_view_subview_count(content));
+
+  ns_window_close(window);
+  ns_release(window);
+}
+
+/* The detail pane's grid built the way the twin builds it, torn down by the
+ * window's own release: the rows, columns and cells are the grid's and go with
+ * it, so nothing here is the caller's to free (R7, KTD12). */
+SYN_TEST(tearing_down_a_window_holding_a_built_up_grid_leaves_nothing) {
+  syn_test_bootstrap();
+  ns_window *window = syn_window_create(400, 300);
+  ns_view *content = ns_window_content_view(window);
+
+  ns_grid_view *grid = ns_grid_view_create_with_number_of_columns_rows(2, 0);
+  ns_grid_view_set_row_spacing(grid, 10);
+  ns_grid_view_set_column_spacing(grid, 12);
+
+  ns_text_field *header = ns_text_field_create_label_with_string("Details");
+  ns_view *header_row[] = {ns_text_field_as_view(header)};
+  ns_grid_view_add_row_with_views(grid, header_row, 1);
+  ns_grid_row_merge_cells_in_range(ns_grid_view_row_at_index(grid, 0), 0, 2);
+  ns_grid_cell_set_x_placement(
+      ns_grid_view_cell_at_column_index_row_index(grid, 0, 0),
+      NS_GRID_CELL_PLACEMENT_LEADING);
+
+  ns_text_field *label = ns_text_field_create_label_with_string("Title:");
+  ns_text_field *field = ns_text_field_create_with_string("Kernel rewrite");
+  ns_view *field_row[] = {ns_text_field_as_view(label),
+                          ns_text_field_as_view(field)};
+  ns_grid_view_add_row_with_views(grid, field_row, 2);
+
+  ns_button *checkbox = ns_button_create_checkbox_with_title("Flagged");
+  ns_view *check_row[] = {ns_grid_cell_empty_content_view(),
+                          ns_button_as_view(checkbox)};
+  ns_grid_view_add_row_with_views(grid, check_row, 2);
+
+  ns_grid_column_set_x_placement(ns_grid_view_column_at_index(grid, 0),
+                                 NS_GRID_CELL_PLACEMENT_TRAILING);
+  ns_grid_column_set_x_placement(ns_grid_view_column_at_index(grid, 1),
+                                 NS_GRID_CELL_PLACEMENT_LEADING);
+  ns_grid_column_set_width(ns_grid_view_column_at_index(grid, 1), 220);
+  ns_grid_cell_set_x_placement(
+      ns_grid_view_cell_for_view(grid, ns_text_field_as_view(field)),
+      NS_GRID_CELL_PLACEMENT_FILL);
+
+  ns_layout_pin_top_edges(ns_grid_view_as_view(grid), content, 20);
+  ns_release(header);
+  ns_release(label);
+  ns_release(field);
+  ns_release(checkbox);
+  ns_release(grid);
+
+  SYN_WAIT_FOR(ns_view_bounds(ns_grid_view_as_view(grid)).size.height > 0,
+               1000);
+  SYN_ASSERT_MSG(ns_grid_view_number_of_rows(grid) == 3,
+                 "the built-up grid reported %ld rows",
+                 ns_grid_view_number_of_rows(grid));
 
   ns_window_close(window);
   ns_release(window);
@@ -596,6 +821,50 @@ SYN_TEST(reading_an_arranged_subview_past_the_end_is_the_appkit_exception) {
   SYN_ASSERT_ABORTS("arranged_subview_read_past_the_end",
                     "ns_stack_view_arranged_subview_at_index");
   SYN_ASSERT_ABORTS("arranged_subview_read_past_the_end", "AppKit raised");
+}
+
+/* The grid's index accessors need no check of their own: AppKit raises
+ * NSRangeException before it changes anything and the entry macro reports that
+ * exception with the function named (KTD4, and "The index check"). */
+SYN_ABORT_CASE(grid_row_read_past_the_end) {
+  syn_test_bootstrap();
+  ns_grid_view *grid = ns_grid_view_create_with_number_of_columns_rows(2, 1);
+  ns_grid_view_row_at_index(grid, 4);
+}
+
+SYN_ABORT_CASE(grid_column_read_past_the_end) {
+  syn_test_bootstrap();
+  ns_grid_view *grid = ns_grid_view_create_with_number_of_columns_rows(2, 1);
+  ns_grid_view_column_at_index(grid, 9);
+}
+
+SYN_ABORT_CASE(grid_cell_read_at_a_negative_index) {
+  syn_test_bootstrap();
+  ns_grid_view *grid = ns_grid_view_create_with_number_of_columns_rows(2, 1);
+  ns_grid_view_cell_at_column_index_row_index(grid, -1, 0);
+}
+
+SYN_TEST(reading_a_grid_outside_its_range_is_the_appkit_exception_it_is) {
+  SYN_ASSERT_ABORTS("grid_row_read_past_the_end", "ns_grid_view_row_at_index");
+  SYN_ASSERT_ABORTS("grid_row_read_past_the_end", "AppKit raised");
+  SYN_ASSERT_ABORTS("grid_column_read_past_the_end",
+                    "ns_grid_view_column_at_index");
+  SYN_ASSERT_ABORTS("grid_column_read_past_the_end", "AppKit raised");
+  SYN_ASSERT_ABORTS("grid_cell_read_at_a_negative_index",
+                    "ns_grid_view_cell_at_column_index_row_index");
+  SYN_ASSERT_ABORTS("grid_cell_read_at_a_negative_index", "AppKit raised");
+}
+
+SYN_ABORT_CASE(a_window_merged_where_a_grid_row_belongs) {
+  syn_test_bootstrap();
+  ns_window *window = syn_window_create(400, 300);
+  ns_grid_row_merge_cells_in_range((ns_grid_row *)(void *)window, 0, 2);
+}
+
+SYN_TEST(merging_a_handle_of_the_wrong_class_names_both_classes) {
+  SYN_ASSERT_ABORTS("a_window_merged_where_a_grid_row_belongs", "NSGridRow");
+  SYN_ASSERT_ABORTS("a_window_merged_where_a_grid_row_belongs",
+                    "ns_grid_row_merge_cells_in_range");
 }
 
 SYN_ABORT_CASE(a_window_pinned_where_a_view_belongs) {

@@ -61,7 +61,10 @@ SYN_SHIM_TABLE(syn_table_view_table, ns_table_view_callbacks,
   const char *text = callback(syn_context, NS_OUT(ns_table_view, syn_sender),
                               column, (long)row);
   SYN_SHIM_CHECK_NONNULL(syn_table_view_table, cell_string, text);
-  return syn_cell_view(tableView, tableColumn, text);
+  /* No icon: a list cell is a label, which is what the twins' list pane shows
+   * in all three of its columns. The outline is the one with a symbol member,
+   * because a sidebar row is the one with an icon. */
+  return syn_cell_view(tableView, tableColumn, text, NULL);
   SYN_SHIM_LEAVE();
 }
 

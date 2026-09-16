@@ -490,6 +490,208 @@ SYN_TEST(scrolling_an_item_into_view_moves_the_scroll_views_visible_rect) {
   ns_release(scroll);
 }
 
+/* ---- the row icon (R15, R23, KTD6) ---- */
+
+/* The Swift sidebar puts an SF Symbol beside every row that is not a group
+ * heading, and null from the member is what "no icon" is spelled with. */
+static char syn_symbol_buffer[] = "folder";
+static char syn_title_buffer[] = "All Items";
+static int syn_symbol_questions;
+
+static const char *syn_cell_symbol(void *context, ns_outline_view *sender,
+                                   const void *item) {
+  (void)context;
+  (void)sender;
+  syn_symbol_questions++;
+  if (((const syn_node *)item)->child_count > 0) return NULL;
+  return syn_symbol_buffer;
+}
+
+/* The one row whose text comes out of a buffer the test can scribble on. */
+static const char *syn_cell_from_buffer(void *context, ns_outline_view *sender,
+                                        const void *item) {
+  (void)context;
+  (void)sender;
+  if (item == &syn_library[0]) return syn_title_buffer;
+  return ((const syn_node *)item)->title;
+}
+
+static const ns_outline_view_callbacks syn_icon_callbacks = {
+    .number_of_children_of_item = syn_children,
+    .child_of_item = syn_child,
+    .is_item_expandable = syn_expandable,
+    .cell_string = syn_cell_from_buffer,
+    .cell_symbol_name = syn_cell_symbol,
+    .is_group_item = syn_is_group,
+    .should_select_item = syn_should_select,
+};
+
+/* The cell view AppKit has for a row, without asking the struct for it again:
+ * `make` false hands back the view that is already there. */
+static ns_view *syn_cell_view_at(ns_outline_view *outline, long row,
+                                 bool make) {
+  return ns_table_view_view_at_column_row_make_if_necessary(
+      ns_outline_view_as_table_view(outline), 0, row, make);
+}
+
+/* The icon shape is one stack view holding the image view and the label; the
+ * text-only shape is the label alone. */
+static ns_view *syn_icon_stack(ns_view *cell) {
+  if (cell == NULL || ns_view_subview_count(cell) != 1) return NULL;
+  ns_view *stack = ns_view_subview_at_index(cell, 0);
+  if (strcmp(syn_test_class_name(stack), "NSStackView") != 0) return NULL;
+  return stack;
+}
+
+SYN_TEST(a_row_with_a_symbol_builds_a_cell_holding_an_icon_and_the_text) {
+  syn_test_bootstrap();
+  syn_reset();
+  syn_symbol_questions = 0;
+  int context = 4;
+
+  ns_scroll_view *scroll = NULL;
+  ns_outline_view *outline = syn_outline_create(&scroll);
+  ns_outline_view_set_callbacks(outline, &syn_icon_callbacks, &context);
+  ns_table_view_reload_data(ns_outline_view_as_table_view(outline));
+  ns_outline_view_expand_item_expand_children(outline, NULL, true);
+
+  /* Row 0 is a group heading, which answers null and gets the text-only cell
+   * an outline built before this member existed. */
+  ns_view *heading = syn_cell_view_at(outline, 0, true);
+  SYN_ASSERT_MSG(syn_icon_stack(heading) == NULL,
+                 "a group heading was given an icon");
+  SYN_ASSERT_MSG(ns_view_subview_count(heading) == 1,
+                 "the heading cell holds %ld subviews",
+                 ns_view_subview_count(heading));
+  SYN_ASSERT_STR_EQ(syn_test_class_name(ns_view_subview_at_index(heading, 0)),
+                    "NSTextField");
+
+  /* Row 1 is a child, which answers with a symbol. */
+  ns_view *row = syn_cell_view_at(outline, 1, true);
+  ns_view *stack = syn_icon_stack(row);
+  SYN_ASSERT_MSG(stack != NULL, "the child row was not given an icon");
+  ns_stack_view *as_stack = (ns_stack_view *)(void *)stack;
+  SYN_ASSERT_MSG(ns_stack_view_arranged_subview_count(as_stack) == 2,
+                 "the icon cell holds %ld arranged subviews",
+                 ns_stack_view_arranged_subview_count(as_stack));
+
+  ns_view *icon = ns_stack_view_arranged_subview_at_index(as_stack, 0);
+  ns_view *label = ns_stack_view_arranged_subview_at_index(as_stack, 1);
+  SYN_ASSERT_STR_EQ(syn_test_class_name(icon), "NSImageView");
+  SYN_ASSERT_STR_EQ(syn_test_class_name(label), "NSTextField");
+  /* The Swift sidebar's numbers: 6 points between the icon and the text, both
+   * centred on the row's middle. */
+  SYN_ASSERT_MSG(ns_stack_view_spacing(as_stack) == 6,
+                 "the icon sits %g points from the text",
+                 ns_stack_view_spacing(as_stack));
+
+  char *text = ns_control_copy_string_value(
+      ns_text_field_as_control((ns_text_field *)(void *)label));
+  SYN_ASSERT_STR_EQ(text, "All Items");
+  ns_string_free(text);
+
+  /* A real symbol resolves to a real image, so the icon has a size of its
+   * own; the row's own text is what a screen reader reads for it (R23). */
+  CGSize icon_size = ns_view_intrinsic_content_size(icon);
+  SYN_ASSERT_MSG(icon_size.width > 0 && icon_size.height > 0,
+                 "the icon has no size: %gx%g", icon_size.width,
+                 icon_size.height);
+  char *described = ns_view_copy_accessibility_label(icon);
+  SYN_ASSERT_STR_EQ(described, "All Items");
+  ns_string_free(described);
+
+  SYN_ASSERT_MSG(syn_symbol_questions > 0,
+                 "the symbol member was never asked");
+
+  ns_outline_view_set_callbacks(outline, NULL, NULL);
+  ns_release(outline);
+  ns_release(scroll);
+}
+
+/* The member unset is the whole of v0 before this commit: one label, no
+ * report, no image view. */
+SYN_TEST(an_outline_with_the_symbol_member_unset_builds_the_cell_it_always_did) {
+  syn_test_bootstrap();
+  syn_reset();
+  int context = 5;
+
+  ns_scroll_view *scroll = NULL;
+  ns_outline_view *outline = syn_outline_create(&scroll);
+  ns_outline_view_set_callbacks(outline, &syn_sidebar_callbacks, &context);
+  /* AppKit is told the delegate answers the cell selector either way, because
+   * the required member that feeds it is set. */
+  SYN_ASSERT_MSG(syn_test_delegate_responds(
+                     outline, "outlineView:viewForTableColumn:item:"),
+                 "the cell selector went missing with the symbol member unset");
+  ns_table_view_reload_data(ns_outline_view_as_table_view(outline));
+  ns_outline_view_expand_item_expand_children(outline, NULL, true);
+
+  for (long row = 0; row < 2; row++) {
+    ns_view *cell = syn_cell_view_at(outline, row, true);
+    SYN_ASSERT_MSG(syn_icon_stack(cell) == NULL, "row %ld grew an icon", row);
+    SYN_ASSERT_MSG(ns_view_subview_count(cell) == 1,
+                   "row %ld's cell holds %ld subviews", row,
+                   ns_view_subview_count(cell));
+    SYN_ASSERT_STR_EQ(syn_test_class_name(ns_view_subview_at_index(cell, 0)),
+                      "NSTextField");
+  }
+
+  char *first = syn_cell_text(outline, 1);
+  SYN_ASSERT_STR_EQ(first, "All Items");
+  ns_string_free(first);
+
+  ns_outline_view_set_callbacks(outline, NULL, NULL);
+  ns_release(outline);
+  ns_release(scroll);
+}
+
+/* R11: both strings a cell is built from are borrowed for the callback and
+ * copied before it returns, so scribbling over either afterwards changes
+ * nothing the cell shows. */
+SYN_TEST(scribbling_over_the_name_buffers_after_a_reload_changes_no_cell) {
+  syn_test_bootstrap();
+  syn_reset();
+  int context = 6;
+
+  ns_scroll_view *scroll = NULL;
+  ns_outline_view *outline = syn_outline_create(&scroll);
+  ns_outline_view_set_callbacks(outline, &syn_icon_callbacks, &context);
+  ns_table_view_reload_data(ns_outline_view_as_table_view(outline));
+  ns_outline_view_expand_item_expand_children(outline, NULL, true);
+
+  ns_view *row = syn_cell_view_at(outline, 1, true);
+  ns_stack_view *as_stack = (ns_stack_view *)(void *)syn_icon_stack(row);
+  SYN_ASSERT_MSG(as_stack != NULL, "the child row was not given an icon");
+  CGSize before = ns_view_intrinsic_content_size(
+      ns_stack_view_arranged_subview_at_index(as_stack, 0));
+  SYN_ASSERT_MSG(before.width > 0, "the icon had no image to begin with");
+
+  memcpy(syn_symbol_buffer, "zzzzzz", 6);
+  memcpy(syn_title_buffer, "ZZZZZZZZZ", 9);
+
+  /* The same view AppKit already has, with the struct not asked again. */
+  ns_view *again = syn_cell_view_at(outline, 1, false);
+  SYN_ASSERT_MSG(again == row, "the outline rebuilt the row's cell");
+  ns_view *label = ns_stack_view_arranged_subview_at_index(as_stack, 1);
+  char *text = ns_control_copy_string_value(
+      ns_text_field_as_control((ns_text_field *)(void *)label));
+  SYN_ASSERT_STR_EQ(text, "All Items");
+  ns_string_free(text);
+
+  CGSize after = ns_view_intrinsic_content_size(
+      ns_stack_view_arranged_subview_at_index(as_stack, 0));
+  SYN_ASSERT_MSG(after.width == before.width && after.height == before.height,
+                 "the icon changed size after the buffer was scribbled: "
+                 "%gx%g became %gx%g",
+                 before.width, before.height, after.width, after.height);
+
+  memcpy(syn_symbol_buffer, "folder", 6);
+  memcpy(syn_title_buffer, "All Items", 9);
+  ns_outline_view_set_callbacks(outline, NULL, NULL);
+  ns_release(outline);
+  ns_release(scroll);
+}
+
 /* ---- teardown (R7, KTD8, KTD12) ---- */
 
 SYN_TEST(tearing_down_a_window_holding_an_outline_releases_clean) {

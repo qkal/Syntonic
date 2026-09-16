@@ -69,14 +69,24 @@ long syn_shim_live_count(void) {
 
 /* KTD8: AppKit caches which optional methods a delegate implements when the
  * slot is assigned, so this has to be right from the moment the shim exists.
- * A member the struct left null is a method this object does not implement. */
+ * A member the struct left null is a method this object does not implement.
+ *
+ * More than one member may feed one selector - the outline's `cell_string` and
+ * `cell_symbol_name` are both read inside
+ * outlineView:viewForTableColumn:item: - so the answer is yes as soon as any
+ * of them is set, and no only when the table names the selector and every
+ * member of it is null. */
 - (BOOL)respondsToSelector:(SEL)selector {
   const char *name = sel_getName(selector);
+  bool named = false;
   for (size_t i = 0; i < _table->count; i++) {
     const syn_shim_member *member = &_table->members[i];
     if (strcmp(name, member->selector) != 0) continue;
-    return *(void *const *)((const char *)_callbacks + member->offset) != NULL;
+    named = true;
+    if (*(void *const *)((const char *)_callbacks + member->offset) != NULL)
+      return YES;
   }
+  if (named) return NO;
   return [super respondsToSelector:selector];
 }
 

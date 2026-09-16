@@ -202,6 +202,32 @@ SYN_TEST(a_text_fields_string_round_trips_as_an_owned_copy) {
   ns_release(field);
 }
 
+/* The list cell's labels are truncated at the tail rather than pushing their
+ * column wider, which is NSControl's lineBreakMode (R17). */
+SYN_TEST(a_labels_line_break_mode_round_trips) {
+  syn_test_bootstrap();
+  ns_text_field *label = ns_text_field_create_label_with_string("Title:");
+  ns_control *control = ns_text_field_as_control(label);
+
+  /* AppKit's own default for a label built this way. */
+  SYN_ASSERT_MSG(ns_control_line_break_mode(control) ==
+                     NS_LINE_BREAK_BY_CLIPPING,
+                 "a new label started on line break mode %lu",
+                 (unsigned long)ns_control_line_break_mode(control));
+
+  ns_control_set_line_break_mode(control, NS_LINE_BREAK_BY_TRUNCATING_TAIL);
+  SYN_ASSERT_MSG(ns_control_line_break_mode(control) ==
+                     NS_LINE_BREAK_BY_TRUNCATING_TAIL,
+                 "the line break mode read back as %lu",
+                 (unsigned long)ns_control_line_break_mode(control));
+
+  ns_control_set_line_break_mode(control, NS_LINE_BREAK_BY_WORD_WRAPPING);
+  SYN_ASSERT(ns_control_line_break_mode(control) ==
+             NS_LINE_BREAK_BY_WORD_WRAPPING);
+
+  ns_release(label);
+}
+
 SYN_TEST(ending_an_edit_fires_did_end_editing_with_the_field_and_the_context) {
   syn_test_bootstrap();
   syn_reset();

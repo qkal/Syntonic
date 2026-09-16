@@ -36,6 +36,20 @@ typedef struct ns_control ns_control;
 typedef struct ns_view ns_view;
 typedef struct ns_font ns_font;
 
+/* NSLineBreakMode, which is what a control does with text too long for the
+ * space it has. It belongs to Foundation's NSParagraphStyle.h, a header no
+ * unit wraps, so it is declared here where it is used and named as though its
+ * own header existed (KTD18). A list cell and a sidebar row are both
+ * `TRUNCATING_TAIL`: the beginning fits and an ellipsis ends the line. */
+typedef enum ns_line_break_mode : uint64_t {
+  NS_LINE_BREAK_BY_WORD_WRAPPING = 0,
+  NS_LINE_BREAK_BY_CHAR_WRAPPING = 1,
+  NS_LINE_BREAK_BY_CLIPPING = 2,
+  NS_LINE_BREAK_BY_TRUNCATING_HEAD = 3,
+  NS_LINE_BREAK_BY_TRUNCATING_TAIL = 4,
+  NS_LINE_BREAK_BY_TRUNCATING_MIDDLE = 5,
+} ns_line_break_mode;
+
 /* -[NSControl setEnabled:] - a disabled control is greyed out and fires no
  * action. */
 void ns_control_set_enabled(ns_control *_Nonnull control, bool enabled)
@@ -82,6 +96,18 @@ void ns_control_set_font(ns_control *_Nonnull control, ns_font *_Nullable font)
 /* -[NSControl font] - `font` is a copy property, so this is owned: release it
  * with ns_release (R7). */
 ns_font *_Nullable ns_control_copy_font(ns_control *_Nonnull control)
+    API_AVAILABLE(macos(26.0));
+
+/* -[NSControl setLineBreakMode:] - what the control does with text too long
+ * for its width. A label in a list cell or a sidebar row is set to
+ * NS_LINE_BREAK_BY_TRUNCATING_TAIL, which is what makes a long title end in an
+ * ellipsis instead of pushing the column wider (R17). */
+void ns_control_set_line_break_mode(ns_control *_Nonnull control,
+                                    ns_line_break_mode line_break_mode)
+    API_AVAILABLE(macos(26.0));
+
+/* -[NSControl lineBreakMode] */
+ns_line_break_mode ns_control_line_break_mode(ns_control *_Nonnull control)
     API_AVAILABLE(macos(26.0));
 
 /* Installs the target/action callback: `action` runs on the main thread with
