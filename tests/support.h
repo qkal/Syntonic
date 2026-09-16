@@ -114,6 +114,24 @@ void syn_test_fire_action(const void *handle);
 bool syn_test_has_delegate(const void *handle);
 bool syn_test_delegate_responds(const void *handle, const char *selector);
 
+/* True when the object behind `handle` has a data source at all. NSComboBox's
+ * data source slot is `assign`, so a suite that watches an uninstall has to
+ * see the slot itself go nil rather than only the shim go away. */
+bool syn_test_has_data_source(const void *handle);
+
+/* Asks the data source of the combo box behind `handle` for the index of
+ * `value`, exactly as AppKit asks it while it matches what the user typed;
+ * there is no public call that reaches it off-screen. -1 for NSNotFound, and
+ * -1 when no data source answers the selector. */
+long syn_test_combo_box_index_of_string_value(const void *handle,
+                                              const char *value);
+
+/* Completes `prefix` through the combo box behind `handle` the way AppKit
+ * does, by asking its cell, which is what consults the data source. Owned:
+ * free it with ns_string_free (R11). Null when nothing completes it. */
+char *syn_test_combo_box_completed_string(const void *handle,
+                                          const char *prefix);
+
 /* Asks the delegate of the outline behind `handle` one of its BOOL questions
  * about the item displayed at `row`, exactly as AppKit asks it: the outline
  * and the item, in that order. False when no delegate answers the selector.
