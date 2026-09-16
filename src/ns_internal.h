@@ -81,6 +81,7 @@ void ns_internal_check_handle(const void *handle, Class expected, bool required,
                               const char *function);
 void ns_internal_check_utf8(const char *utf8, bool required,
                             const char *function);
+void ns_internal_check_index(long index, long largest, const char *function);
 __attribute__((noreturn)) void ns_internal_report_exception(
     NSException *exception, const char *function);
 
@@ -96,6 +97,14 @@ __attribute__((noreturn)) void ns_internal_report_exception(
 #define NS_CHECK_UTF8(utf8, required)                                         \
   ns_internal_check_utf8((utf8), (required), __func__)
 
+/* R12: `index` is outside 0..`largest`, inclusive. For the calls where AppKit
+ * would take the bad index silently, or raises only after doing part of the
+ * work - inserting into a menu is the first of those. Where AppKit raises
+ * cleanly, the entry macro's exception report is the check and this is not
+ * needed. */
+#define NS_CHECK_INDEX(index, largest)                                        \
+  ns_internal_check_index((index), (largest), __func__)
+
 /* KTD4: report an AppKit exception rather than unwinding through C frames,
  * which would skip both the C cleanups and the ARC releases. */
 #define NS_TRY_BEGIN @try {
@@ -110,6 +119,7 @@ __attribute__((noreturn)) void ns_internal_report_exception(
 #define NS_CHECK_MAIN_THREAD() ((void)0)
 #define NS_CHECK_HANDLE(handle, cls, required) ((void)0)
 #define NS_CHECK_UTF8(utf8, required) ((void)0)
+#define NS_CHECK_INDEX(index, largest) ((void)0)
 #define NS_TRY_BEGIN
 #define NS_TRY_END
 

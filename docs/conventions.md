@@ -100,6 +100,14 @@ underscores, **in argument order**.
 
 Long names are expected. Do not shorten them.
 
+**A segment whose argument cannot cross is dropped from the name**, and the
+comment still names the whole selector. `SEL`, `id` and `Class` never cross
+(see [Boundary types](#boundary-types)), so
+`-[NSMenuItem initWithTitle:action:keyEquivalent:]` becomes
+`ns_menu_item_create_with_title_key_equivalent`: the action arrives later,
+through `ns_menu_item_set_action`. Drop a segment only when its type is one the
+boundary has no shape for, never to shorten a name.
+
 ### Properties
 
 | AppKit | Syntonic | Note |
@@ -266,6 +274,16 @@ bracket, a class name starting with `NS`, a space, then the selector:
 
 Run it on one file while you work: `./scripts/lint-headers.sh
 include/syntonic/ns_combo_box.h`. `just lint-headers` covers all of `include/`.
+
+### An enum from a header that is not wrapped
+
+An enum sometimes belongs to an SDK header no unit wraps. `NSEventModifierFlags`
+is `NSEvent.h`'s and v0 wraps no part of `NSEvent`, but a menu item's key
+equivalent needs it. **Declare the enum in the header that uses it**, named by
+the naming rule as though its own header existed — `ns_event_modifier_flags` —
+and say in its comment which SDK header it comes from. Do not create a mirror
+header for an enum alone. The first unit that wraps that SDK class moves the
+enum into the mirror header it belongs to, which before U11 is free.
 
 ### What a public header may contain
 
@@ -800,6 +818,34 @@ is `-[NSMenu insertItem:atIndex:]`, which raises only after doing partial work.
 Write the check with the same shape as the built-in ones: print the class, the
 function and the violated rule, then stop.
 
+### The index check
+
+`NS_CHECK_INDEX(index, largest)` in `src/ns_internal.h` is that check for an
+index, and it is the only extra one a wrapper writes by hand. `largest` is the
+largest index **this call** accepts, which is not the same number for every
+call: an insert accepts the count, because the count appends, while an accessor
+accepts the count minus one.
+
+```c
+void ns_menu_insert_item_at_index(ns_menu *menu, ns_menu_item *item,
+                                  long index) {
+  NS_ENTER();
+  NSMenu *target = NS_IN(NSMenu, menu);
+  NS_CHECK_INDEX(index, (long)target.numberOfItems);
+  [target insertItem:NS_IN(NSMenuItem, item) atIndex:(NSInteger)index];
+  NS_LEAVE();
+}
+```
+
+It reports the index, the range and the function, and it is nothing under
+`NDEBUG` like every other check here.
+
+**Do not write it where AppKit raises cleanly.** `-[NSMenu itemAtIndex:]` past
+the end raises before it changes anything, so `ns_menu_item_at_index` has no
+check of its own and the entry macro's exception report names the function.
+`tests/test_menu.c` pins both halves: the insert aborts with the range, the
+accessor aborts with the AppKit exception.
+
 ---
 
 ## Accessibility
@@ -1043,7 +1089,7 @@ named section in its own commit; nothing else in the document moves.
 | Unit | Appends |
 |---|---|
 | U14 ✓ | landed: the application and window rows of the per-protocol table, confirmed against the shipped structs; [How a wrapper installs one](#how-a-wrapper-installs-one), which is `src/syn_shims.h` as the six later units use it; `+[NSApplication sharedApplication]` on the [borrowed-return allowlist](#the-mechanical-rule-read-the-sdk-propertys-attribute); `NSWindow`'s `releasedWhenClosed` fixup confirmed. The view controller needed no row: NSViewController has no protocol Syntonic wraps |
-| U6 | the menu index-check pattern in [Misuse checks](#misuse-checks-and-exceptions) |
+| U6 ✓ | landed: [The index check](#the-index-check) in [Misuse checks](#misuse-checks-and-exceptions), which is `NS_CHECK_INDEX` and where not to use it; the dropped-segment rule in [Constructors](#constructors), for a selector segment whose type cannot cross; [An enum from a header that is not wrapped](#an-enum-from-a-header-that-is-not-wrapped), for `ns_event_modifier_flags`; `-[NSMenu itemAtIndex:]` confirmed on the [borrowed-return allowlist](#the-mechanical-rule-read-the-sdk-propertys-attribute). No per-protocol row and no post-init fixup: v0 wraps no menu protocol, and neither `NSMenu` nor `NSMenuItem` needs a line after construction |
 | U7 | the accessibility setters in [Accessibility](#accessibility); the text-field row of the per-protocol table |
 | U8 | the table and outline rows of the per-protocol table, confirmed against the shipped structs |
 | U9 | the toolbar row, including the dropped identifier methods |

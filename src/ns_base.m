@@ -73,6 +73,19 @@ void ns_internal_check_utf8(const char *utf8, bool required,
   ns_internal_stop();
 }
 
+/* AppKit's own report for a bad index arrives after it has already done part
+ * of the work, or not at all, so the wrapper checks first and names itself
+ * (R12). `largest` is the largest index the call accepts, which for an insert
+ * is the count. */
+void ns_internal_check_index(long index, long largest, const char *function) {
+  if (index >= 0 && index <= largest) return;
+  fprintf(stderr,
+          "syntonic: %s: index %ld is out of range; this call accepts 0 "
+          "through %ld (R12).\n",
+          function, index, largest);
+  ns_internal_stop();
+}
+
 void ns_internal_report_exception(NSException *exception,
                                   const char *function) {
   NSString *reason = exception.reason;

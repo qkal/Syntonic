@@ -20,6 +20,9 @@
  * its own in the same commit (R6). */
 #include <syntonic/ns_application.h>
 #include <syntonic/ns_base.h>
+#include <syntonic/ns_menu.h>
+#include <syntonic/ns_menu_bar.h>
+#include <syntonic/ns_menu_item.h>
 #include <syntonic/ns_view_controller.h>
 #include <syntonic/ns_window.h>
 

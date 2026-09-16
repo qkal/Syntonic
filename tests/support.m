@@ -214,6 +214,21 @@ bool syn_test_delegate_responds(const void *handle, const char *selector) {
   }
 }
 
+const char *syn_test_action_name(const void *handle) {
+  @autoreleasepool {
+    id object = (__bridge id)(void *)handle;
+    SEL action = ((SEL(*)(id, SEL))objc_msgSend)(object, @selector(action));
+    return action != NULL ? sel_getName(action) : "";
+  }
+}
+
+bool syn_test_has_target(const void *handle) {
+  @autoreleasepool {
+    id object = (__bridge id)(void *)handle;
+    return ((id(*)(id, SEL))objc_msgSend)(object, @selector(target)) != nil;
+  }
+}
+
 long syn_test_shim_live_count(void) {
 #ifndef NDEBUG
   return syn_shim_live_count();

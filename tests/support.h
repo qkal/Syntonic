@@ -114,6 +114,16 @@ void syn_test_fire_action(const void *handle);
 bool syn_test_has_delegate(const void *handle);
 bool syn_test_delegate_responds(const void *handle, const char *selector);
 
+/* The action selector the object behind `handle` carries, as the runtime
+ * spells it, and "" when it has none. A SEL never crosses Syntonic's own
+ * boundary (R11), so this is the only way a C suite can pin the standard menu
+ * bar's responder-chain selectors. Runtime-owned, never freed. */
+const char *syn_test_action_name(const void *handle);
+
+/* True when the object behind `handle` has a target. A standard menu item's
+ * nil target is what sends its action down the responder chain (AE5). */
+bool syn_test_has_target(const void *handle);
+
 /* How many shims are alive, so a suite can watch a replaced or uninstalled one
  * go away. Negative in a release build, which keeps no counter. */
 long syn_test_shim_live_count(void);
