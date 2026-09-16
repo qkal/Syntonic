@@ -332,3 +332,109 @@ SYN_TEST(creating_a_window_off_the_main_thread_names_the_function) {
                     "ns_window_create_with_content_rect_style_mask_backing_defer");
   SYN_ASSERT_ABORTS("window_created_off_the_main_thread", "main thread only");
 }
+
+/* ---- the geometry and state reads the twin comparison needs (U9) ---- */
+
+/* setFrameOrigin: moves the window without resizing it, and the frame reads
+ * the move back. The capture script pins both twins to one origin, which is
+ * what makes a pixel comparison meaningful. */
+SYN_TEST(setting_the_frame_origin_moves_the_window_and_keeps_its_size) {
+  syn_test_bootstrap();
+  ns_window *window = syn_window_create();
+  ns_window_set_content_size(window, CGSizeMake(400, 300));
+  CGRect before = ns_window_frame(window);
+
+  ns_window_set_frame_origin(window, CGPointMake(200, 200));
+  CGRect after = ns_window_frame(window);
+  SYN_ASSERT_MSG(after.origin.x == 200 && after.origin.y == 200,
+                 "the origin reads %g,%g, not 200,200", after.origin.x,
+                 after.origin.y);
+  SYN_ASSERT_MSG(after.size.width == before.size.width &&
+                     after.size.height == before.size.height,
+                 "moving the window changed its size");
+
+  ns_release(window);
+}
+
+/* isVisible is what tells a capture script the window is up. An application
+ * with the prohibited activation policy has visible windows on no screen. */
+SYN_TEST(a_window_is_visible_between_ordering_front_and_closing) {
+  syn_test_bootstrap();
+  ns_window *window = syn_window_create();
+  SYN_ASSERT_MSG(!ns_window_visible(window),
+                 "a window is visible before anything ordered it front");
+
+  ns_window_make_key_and_order_front(window);
+  SYN_ASSERT_MSG(ns_window_visible(window),
+                 "the window is not visible after being ordered front");
+
+  ns_window_close(window);
+  SYN_ASSERT_MSG(!ns_window_visible(window),
+                 "close did not order the window out");
+  ns_release(window);
+}
+
+/* The window server's id, which is what a window capture targets. It is
+ * assigned when the window first goes on screen, so it is read after ordering
+ * front, not before. */
+SYN_TEST(a_window_that_has_been_ordered_front_reports_a_window_number) {
+  syn_test_bootstrap();
+  ns_window *window = syn_window_create();
+  ns_window_make_key_and_order_front(window);
+  syn_test_spin(50);
+  SYN_ASSERT_MSG(ns_window_window_number(window) > 0,
+                 "the window number reads %ld, so nothing could capture it",
+                 ns_window_window_number(window));
+
+  ns_window_close(window);
+  ns_release(window);
+}
+
+/* State restoration would move and resize a window behind the program's back,
+ * which is exactly what a pinned-geometry comparison cannot have. */
+SYN_TEST(restorable_reads_back_both_ways) {
+  syn_test_bootstrap();
+  ns_window *window = syn_window_create();
+  SYN_ASSERT_MSG(ns_window_restorable(window),
+                 "a window does not start restorable, which AppKit's default "
+                 "says it should");
+
+  ns_window_set_restorable(window, false);
+  SYN_ASSERT_MSG(!ns_window_restorable(window),
+                 "turning restoration off did not read back");
+  ns_window_set_restorable(window, true);
+  SYN_ASSERT_MSG(ns_window_restorable(window),
+                 "turning restoration back on did not read back");
+
+  ns_release(window);
+}
+
+/* A window with no toolbar reports none; ns_toolbar_set_callbacks is what the
+ * toolbar suite covers, and this is only the reader U9 added here. */
+SYN_TEST(a_window_reports_the_toolbar_and_the_toolbar_style_it_was_given) {
+  syn_test_bootstrap();
+  ns_window *window = syn_window_create();
+  SYN_ASSERT_MSG(ns_window_toolbar(window) == NULL,
+                 "a fresh window already has a toolbar");
+  SYN_ASSERT_MSG(ns_window_get_toolbar_style(window) ==
+                     NS_WINDOW_TOOLBAR_STYLE_AUTOMATIC,
+                 "a fresh window does not start on the automatic toolbar "
+                 "style");
+
+  ns_toolbar *toolbar = ns_toolbar_create_with_identifier(
+      "dev.kaino.syntonic.test.window.toolbar");
+  ns_window_set_toolbar(window, toolbar);
+  ns_window_set_toolbar_style(window, NS_WINDOW_TOOLBAR_STYLE_UNIFIED);
+  SYN_ASSERT_MSG(ns_window_toolbar(window) == toolbar,
+                 "the window reports a different toolbar than the one set");
+  SYN_ASSERT_MSG(ns_window_get_toolbar_style(window) ==
+                     NS_WINDOW_TOOLBAR_STYLE_UNIFIED,
+                 "the toolbar style did not read back as unified");
+
+  ns_window_set_toolbar(window, NULL);
+  SYN_ASSERT_MSG(ns_window_toolbar(window) == NULL,
+                 "a null toolbar left one on the window");
+
+  ns_release(toolbar);
+  ns_release(window);
+}

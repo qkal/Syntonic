@@ -84,10 +84,23 @@ void ns_window_set_toolbar(ns_window *window, ns_toolbar *toolbar) {
   NS_LEAVE();
 }
 
+/* Borrowed: `toolbar` is a strong property (R7). */
+ns_toolbar *ns_window_toolbar(ns_window *window) {
+  NS_ENTER();
+  return NS_OUT(ns_toolbar, NS_IN(NSWindow, window).toolbar);
+  NS_LEAVE();
+}
+
 void ns_window_set_toolbar_style(ns_window *window,
                                  ns_window_toolbar_style style) {
   NS_ENTER();
   NS_IN(NSWindow, window).toolbarStyle = (NSWindowToolbarStyle)style;
+  NS_LEAVE();
+}
+
+ns_window_toolbar_style ns_window_get_toolbar_style(ns_window *window) {
+  NS_ENTER();
+  return (ns_window_toolbar_style)NS_IN(NSWindow, window).toolbarStyle;
   NS_LEAVE();
 }
 
@@ -115,6 +128,18 @@ CGRect ns_window_frame(ns_window *window) {
   NS_LEAVE();
 }
 
+void ns_window_set_frame_origin(ns_window *window, CGPoint origin) {
+  NS_ENTER();
+  [NS_IN(NSWindow, window) setFrameOrigin:origin];
+  NS_LEAVE();
+}
+
+long ns_window_window_number(ns_window *window) {
+  NS_ENTER();
+  return (long)NS_IN(NSWindow, window).windowNumber;
+  NS_LEAVE();
+}
+
 void ns_window_make_key_and_order_front(ns_window *window) {
   NS_ENTER();
   [NS_IN(NSWindow, window) makeKeyAndOrderFront:nil];
@@ -124,6 +149,27 @@ void ns_window_make_key_and_order_front(ns_window *window) {
 void ns_window_close(ns_window *window) {
   NS_ENTER();
   [NS_IN(NSWindow, window) close];
+  NS_LEAVE();
+}
+
+bool ns_window_visible(ns_window *window) {
+  NS_ENTER();
+  return NS_IN(NSWindow, window).visible;
+  NS_LEAVE();
+}
+
+/* NSWindowRestoration.h's category on NSWindow, not NSWindow.h's own, which is
+ * why ns_window.h carries it with a note rather than a mirror header of its
+ * own (R6). */
+void ns_window_set_restorable(ns_window *window, bool restorable) {
+  NS_ENTER();
+  NS_IN(NSWindow, window).restorable = restorable;
+  NS_LEAVE();
+}
+
+bool ns_window_restorable(ns_window *window) {
+  NS_ENTER();
+  return NS_IN(NSWindow, window).restorable;
   NS_LEAVE();
 }
 

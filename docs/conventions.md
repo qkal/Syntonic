@@ -713,7 +713,7 @@ required**, because every protocol v0 wraps is `@optional` in the SDK.
 | `ns_text_field_callbacks` | `NSTextFieldDelegate` | none | `did_change`, `did_end_editing` | — | U7 ✓ |
 | `ns_table_view_callbacks` | `NSTableViewDataSource` + `NSTableViewDelegate` (merged) | `number_of_rows`, `cell_string` | `selection_did_change` | — | U8 ✓ |
 | `ns_outline_view_callbacks` | `NSOutlineViewDataSource` + `NSOutlineViewDelegate` (merged) | `number_of_children_of_item`, `child_of_item`, `is_item_expandable`, `cell_string` | `should_expand_item`, `should_collapse_item`, `is_group_item`, `should_select_item`, `selection_did_change` | — | U8 ✓ |
-| `ns_toolbar_callbacks` | `NSToolbarDelegate` | `item_for_item_identifier_will_be_inserted_into_toolbar` | — | `toolbarDefaultItemIdentifiers:`, `toolbarAllowedItemIdentifiers:` — the wrapper answers both from C string arrays passed by pointer plus count | U9 |
+| `ns_toolbar_callbacks` | `NSToolbarDelegate` | `item_for_item_identifier_will_be_inserted_into_toolbar` | — | `toolbarDefaultItemIdentifiers:`, `toolbarAllowedItemIdentifiers:` — the wrapper answers both from C string arrays passed to `ns_toolbar_set_callbacks` by pointer plus count, and **deep-copied there**, which is the one exception to KTD17's borrow rule (see below) | U9 ✓ |
 | `ns_combo_box_callbacks` | `NSComboBoxDataSource` + `NSComboBoxDelegate` (merged; embeds `ns_text_field_callbacks` first, because `NSComboBoxDelegate` inherits `NSTextFieldDelegate`) | `number_of_items`, `object_value_for_item_at_index` | `index_of_item_with_string_value`, `completed_string`, `selection_did_change`, `selection_is_changing`, `will_pop_up`, `will_dismiss` | — | U13 |
 
 A ✓ in the unit column means the row was checked against the shipped struct.
@@ -757,6 +757,29 @@ Why these are required even though the SDK says `@optional`:
 are required when not using bindings; a table with no `number_of_rows` shows
 nothing; an outline with no `child_of_item` cannot be walked. Making them
 required turns a blank control into a report that names the missing member.
+
+**The toolbar's two identifier lists are copied, not borrowed**, and that is
+the one place in v0 where an array passed in is not borrowed for the call
+(KTD17). AppKit asks a toolbar's delegate for its default and allowed
+identifiers *after* the install returns, repeatedly, for as long as the toolbar
+exists, so a caller's stack array would be a dangling read on the first
+question. `ns_toolbar_set_callbacks` therefore copies the array and every
+string in it, and **the copy lives as long as the toolbar** — or until the next
+install replaces it, which a null struct also does. The caller's array may go
+out of scope the moment the call returns; `tests/test_toolbar.c` installs from
+storage it then frees and scribbles, and the suite fails without the copy.
+Nothing else about the boundary changes: the strings still cross as UTF-8 and
+the count still comes alongside the pointer. A protocol whose stored data is
+only ever read during the call it was passed in keeps the borrow rule; write
+the exception down here if you find another.
+
+**Returning an owned handle is the toolbar member's shape**, and
+`syn_shim_take` in `src/syn_shims.h` is what implements rule 8 above: the
+member returns `ns_toolbar_item_create…`'s result directly, the wrapper hands
+the item to AppKit, and the reference is dropped once AppKit has retained it.
+The member's null is an answer and not misuse, because the SDK declares the
+return nullable — which is why its `SYN_SHIM_CHECK_HANDLE` is written with
+`required` false.
 
 **Adding a protocol?** Add a row here in the same commit as the wrapper, fill
 every column, and say in the pull request why each required member is required.
@@ -1160,7 +1183,7 @@ named section in its own commit; nothing else in the document moves.
 | U7 ✓ | landed: the accessibility setters and the role-as-a-string decision in [Accessibility](#accessibility); the text-field row of the per-protocol table, confirmed against the shipped struct; the inherited-API-through-the-upcast rule in [Upcasts](#upcasts), which is why there is no `ns_button_set_action`. No post-init fixup: none of `NSView`, `NSControl`, `NSButton`, `NSTextField` or `NSPopUpButton` needs a line after construction |
 | U8 ✓ | landed: the table and outline rows of the per-protocol table, confirmed against the shipped structs, with what a member's extra arguments are and why the outline's two group-row members exist; `SYN_SHIM_CHECK_NONNULL` in [Debug return validation](#debug-return-validation), the third check, for a member whose return is neither a count nor an object handle; the outline's three two-selector compositions in [Syntonic-owned names](#syntonic-owned-names). `-[NSTableView viewAtColumn:row:makeIfNecessary:]` confirmed on the [borrowed-return allowlist](#the-mechanical-rule-read-the-sdk-propertys-attribute). No post-init fixup. Two things a later unit should know rather than rediscover: **a constructor is the one inherited member a subclass redeclares**, because an upcast needs an object to upcast, so `ns_outline_view_create_with_frame` carries `-[NSTableView initWithFrame:]` in its comment; and `NSTableColumn` got its own mirror header, because a table with no column shows no cell and the alternative was a builder in a mirror header |
 | U15 ✓ | landed: the **array of arrays** rule in [Boundary types](#boundary-types), which is `ns_grid_view_row`. No per-protocol row and no post-init fixup: v0 wraps no stack, grid, font or colour protocol. Two things the document was silent on, decided here and recorded in the headers rather than in this document: `NSEdgeInsets` crosses as Syntonic's own `ns_edge_insets` struct, because Foundation's `NSGeometry.h` is not includable from C; a `strong` **class** property such as `+[NSColor labelColor]` is borrowed under the existing property-attribute rule and needs no allowlist row |
-| U9 | the toolbar row, including the dropped identifier methods |
+| U9 ✓ | landed: the toolbar row of the per-protocol table, confirmed against the shipped struct, with its two dropped identifier methods and the **deep-copy exception** to [Boundary types](#boundary-types)' borrow rule; `syn_shim_take`'s first consumer, which is rule 8 of [A protocol struct](#a-protocol-struct) in practice. Three things the document was silent or wrong on, decided here: **the string-constant example in [Enums and string constants](#enums-and-string-constants) does not compile** — a C `extern const char *const` spelled exactly like AppKit's own constant is a redeclaration of the SDK's `NSString` under that name, so no source including both headers builds, and the three toolbar identifiers `ns_toolbar_item.h` exports therefore follow the *enum* constant rule instead (`NS_TOOLBAR_SIDEBAR_TRACKING_SEPARATOR_ITEM_IDENTIFIER`), carry AppKit's value as a literal, and are pinned equal to AppKit's own symbol by `tests/test_toolbar.c`; a shim method that answers purely from stored data crosses into no C callback, so the two identifier methods carry a plain autorelease pool rather than `SYN_SHIM_ENTER`'s sender hold; and `-[NSToolbarItem performClick:]` does not exist on macOS 27, so a toolbar item is driven the way AppKit drives it, by sending its action to its target. No post-init fixup and no borrowed-return allowlist row: every borrowed return here is a `strong` property getter. `NSWindow`'s `isRestorable` came with this unit into `ns_window.h` although the SDK declares it in `NSWindowRestoration.h`, on the [enum from a header that is not wrapped](#an-enum-from-a-header-that-is-not-wrapped) precedent, and the header says so |
 | U10 ✓ | landed, all three settled by rules already here: a constructor belongs to the concrete class even when the SDK header declares no initializer of its own, as `ns_view_controller_create` already showed and `ns_tab_view_controller_create` repeats; a nil AppKit documents is an answer, not misuse, so `+[NSImage imageWithSystemSymbolName:accessibilityDescription:]` crosses its nil as null rather than aborting (R12 checks misuse, not results); and `-[NSTabViewController setSelectedTabViewItemIndex:]` takes [the index check](#the-index-check) because AppKit is clean on neither side of the range - a negative index selects the first tab silently, and the exception past the end names a range that includes the index it rejected. No per-protocol row and no post-init fixup: `NSTabViewController` is its own tab view's and toolbar's delegate and Syntonic wraps neither protocol, and none of `NSTabViewController`, `NSTabViewItem` or `NSImage` needs a line after construction |
 | U13 | the combo box row, confirmed against the shipped wrapper — the row is pre-filled from the SDK header so the author has a source |
 | U11 | whatever the README checkpoint's feedback changes; after U11 a change here is a public change |

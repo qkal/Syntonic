@@ -33,12 +33,17 @@
 #include <syntonic/ns_outline_view.h>
 #include <syntonic/ns_pop_up_button.h>
 #include <syntonic/ns_scroll_view.h>
+#include <syntonic/ns_search_toolbar_item.h>
+#include <syntonic/ns_split_view_controller.h>
+#include <syntonic/ns_split_view_item.h>
 #include <syntonic/ns_stack_view.h>
 #include <syntonic/ns_tab_view_controller.h>
 #include <syntonic/ns_tab_view_item.h>
 #include <syntonic/ns_table_column.h>
 #include <syntonic/ns_table_view.h>
 #include <syntonic/ns_text_field.h>
+#include <syntonic/ns_toolbar.h>
+#include <syntonic/ns_toolbar_item.h>
 #include <syntonic/ns_view.h>
 #include <syntonic/ns_view_controller.h>
 #include <syntonic/ns_window.h>

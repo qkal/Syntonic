@@ -110,10 +110,22 @@ void ns_window_set_toolbar(ns_window *_Nonnull window,
                            ns_toolbar *_Nullable toolbar)
     API_AVAILABLE(macos(26.0));
 
+/* -[NSWindow toolbar] - a strong property, so this is borrowed: valid while
+ * the window holds it, kept longer with ns_retain (R7). Null until a toolbar
+ * is set, and the toolbar a tab view controller made for itself once one
+ * is. */
+ns_toolbar *_Nullable ns_window_toolbar(ns_window *_Nonnull window)
+    API_AVAILABLE(macos(26.0));
+
 /* -[NSWindow setToolbarStyle:] */
 void ns_window_set_toolbar_style(ns_window *_Nonnull window,
                                  ns_window_toolbar_style style)
     API_AVAILABLE(macos(26.0));
+
+/* -[NSWindow toolbarStyle] - `get_`, because ns_window_toolbar_style is
+ * already a type name and C puts the two in one namespace (R5). */
+ns_window_toolbar_style ns_window_get_toolbar_style(
+    ns_window *_Nonnull window) API_AVAILABLE(macos(26.0));
 
 /* -[NSWindow setContentMinSize:] - the floor AppKit holds a resize the user
  * drives to. It does not clamp ns_window_set_content_size: a size the program
@@ -133,6 +145,18 @@ void ns_window_set_content_size(ns_window *_Nonnull window, CGSize size)
 /* -[NSWindow frame] - in screen coordinates, including the title bar. */
 CGRect ns_window_frame(ns_window *_Nonnull window) API_AVAILABLE(macos(26.0));
 
+/* -[NSWindow setFrameOrigin:] - moves the window's bottom-left corner in
+ * screen coordinates without changing its size. Moving a window lays nothing
+ * out again, so anything reading frames afterwards has to be told. */
+void ns_window_set_frame_origin(ns_window *_Nonnull window, CGPoint origin)
+    API_AVAILABLE(macos(26.0));
+
+/* -[NSWindow windowNumber] - the window server's id for this window, which is
+ * what a screen capture targets. Zero or negative until the window has been on
+ * screen once. */
+long ns_window_window_number(ns_window *_Nonnull window)
+    API_AVAILABLE(macos(26.0));
+
 /* -[NSWindow makeKeyAndOrderFront:] - AppKit's sender argument is an `id` and
  * never crosses the boundary (R11), so the library passes nil. */
 void ns_window_make_key_and_order_front(ns_window *_Nonnull window)
@@ -142,6 +166,23 @@ void ns_window_make_key_and_order_front(ns_window *_Nonnull window)
  * release the window: a Syntonic window has releasedWhenClosed off, so your
  * handle stays valid and ns_release is what tears the tree down (KTD7, F3). */
 void ns_window_close(ns_window *_Nonnull window) API_AVAILABLE(macos(26.0));
+
+/* -[NSWindow isVisible] - a BOOL getter drops AppKit's `is` (R5). True
+ * between ns_window_make_key_and_order_front and ns_window_close; an
+ * application with the prohibited activation policy has visible windows that
+ * are on no screen. */
+bool ns_window_visible(ns_window *_Nonnull window) API_AVAILABLE(macos(26.0));
+
+/* -[NSWindow setRestorable:] - the SDK declares this one on NSWindow in
+ * NSWindowRestoration.h rather than in NSWindow.h. False keeps AppKit from
+ * saving and restoring the window's state, which is what a window whose
+ * geometry is pinned by the program wants. */
+void ns_window_set_restorable(ns_window *_Nonnull window, bool restorable)
+    API_AVAILABLE(macos(26.0));
+
+/* -[NSWindow isRestorable] - a BOOL getter drops AppKit's `is` (R5). */
+bool ns_window_restorable(ns_window *_Nonnull window)
+    API_AVAILABLE(macos(26.0));
 
 /* -[NSWindow setInitialFirstResponder:] - the view that holds focus the first
  * time the window is made key, and where an explicit Tab chain starts (R19). */
