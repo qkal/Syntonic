@@ -793,11 +793,17 @@ SYN_TEST(a_symbol_member_overwriting_the_text_buffer_changes_no_cell) {
   ns_string_free(text);
 
   /* The icon is the symbol the second member wrote, not the row's title. */
-  CGSize icon_size = ns_view_intrinsic_content_size(
-      ns_stack_view_arranged_subview_at_index(as_stack, 0));
+  ns_view *icon = ns_stack_view_arranged_subview_at_index(as_stack, 0);
+  CGSize icon_size = ns_view_intrinsic_content_size(icon);
   SYN_ASSERT_MSG(icon_size.width > 0 && icon_size.height > 0,
                  "the icon has no size: %gx%g", icon_size.width,
                  icon_size.height);
+
+  /* The same copy is what a screen reader reads for the icon (R23), so it is
+   * the row's title there too and not the symbol name written over it. */
+  char *described = ns_view_copy_accessibility_label(icon);
+  SYN_ASSERT_STR_EQ(described, "All Items");
+  ns_string_free(described);
 
   ns_outline_view_set_callbacks(outline, NULL, NULL);
   ns_release(outline);
