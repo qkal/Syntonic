@@ -735,6 +735,81 @@ SYN_TEST(scribbling_over_the_name_buffers_after_a_reload_changes_no_cell) {
   ns_release(scroll);
 }
 
+/* One scratch buffer formatted on demand is an ordinary way for a C caller to
+ * answer both members, and it holds the wrapper to the borrow rule: the text
+ * has to be copied before the symbol member is asked, not after. */
+static char syn_shared_scratch[32];
+
+static const char *syn_cell_into_scratch(void *context, ns_outline_view *sender,
+                                         const void *item) {
+  (void)context;
+  (void)sender;
+  snprintf(syn_shared_scratch, sizeof syn_shared_scratch, "%s",
+           ((const syn_node *)item)->title);
+  return syn_shared_scratch;
+}
+
+static const char *syn_symbol_into_scratch(void *context,
+                                           ns_outline_view *sender,
+                                           const void *item) {
+  (void)context;
+  (void)sender;
+  if (((const syn_node *)item)->child_count > 0) return NULL;
+  snprintf(syn_shared_scratch, sizeof syn_shared_scratch, "folder");
+  return syn_shared_scratch;
+}
+
+static const ns_outline_view_callbacks syn_scratch_callbacks = {
+    .number_of_children_of_item = syn_children,
+    .child_of_item = syn_child,
+    .is_item_expandable = syn_expandable,
+    .cell_string = syn_cell_into_scratch,
+    .cell_symbol_name = syn_symbol_into_scratch,
+    .is_group_item = syn_is_group,
+    .should_select_item = syn_should_select,
+};
+
+/* R11: the row's text survives a symbol member that writes over the very
+ * buffer the text came out of. */
+SYN_TEST(a_symbol_member_overwriting_the_text_buffer_changes_no_cell) {
+  syn_test_bootstrap();
+  syn_reset();
+  int context = 7;
+
+  ns_scroll_view *scroll = NULL;
+  ns_outline_view *outline = syn_outline_create(&scroll);
+  ns_outline_view_set_callbacks(outline, &syn_scratch_callbacks, &context);
+  ns_table_view_reload_data(ns_outline_view_as_table_view(outline));
+  ns_outline_view_expand_item_expand_children(outline, NULL, true);
+
+  ns_view *row = syn_cell_view_at(outline, 1, true);
+  ns_stack_view *as_stack = (ns_stack_view *)(void *)syn_icon_stack(row);
+  SYN_ASSERT_MSG(as_stack != NULL, "the child row was not given an icon");
+
+  ns_view *label = ns_stack_view_arranged_subview_at_index(as_stack, 1);
+  char *text = ns_control_copy_string_value(
+      ns_text_field_as_control((ns_text_field *)(void *)label));
+  SYN_ASSERT_STR_EQ(text, "All Items");
+  ns_string_free(text);
+
+  /* The icon is the symbol the second member wrote, not the row's title. */
+  ns_view *icon = ns_stack_view_arranged_subview_at_index(as_stack, 0);
+  CGSize icon_size = ns_view_intrinsic_content_size(icon);
+  SYN_ASSERT_MSG(icon_size.width > 0 && icon_size.height > 0,
+                 "the icon has no size: %gx%g", icon_size.width,
+                 icon_size.height);
+
+  /* The same copy is what a screen reader reads for the icon (R23), so it is
+   * the row's title there too and not the symbol name written over it. */
+  char *described = ns_view_copy_accessibility_label(icon);
+  SYN_ASSERT_STR_EQ(described, "All Items");
+  ns_string_free(described);
+
+  ns_outline_view_set_callbacks(outline, NULL, NULL);
+  ns_release(outline);
+  ns_release(scroll);
+}
+
 /* ---- teardown (R7, KTD8, KTD12) ---- */
 
 SYN_TEST(tearing_down_a_window_holding_an_outline_releases_clean) {

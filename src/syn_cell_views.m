@@ -89,7 +89,7 @@ static NSTableCellView *syn_build_icon_cell_view(
 }
 
 NSTableCellView *syn_cell_view(NSTableView *table, NSTableColumn *column,
-                               const char *utf8, const char *symbol) {
+                               NSString *label, const char *symbol) {
   NSUserInterfaceItemIdentifier identifier =
       column.identifier ?: syn_cell_view_identifier;
   /* Composed per call rather than memoised: AppKit's reuse compares the
@@ -106,16 +106,16 @@ NSTableCellView *syn_cell_view(NSTableView *table, NSTableColumn *column,
     cell = symbol != NULL ? syn_build_icon_cell_view(identifier)
                           : syn_build_cell_view(identifier);
 
-  /* Both strings are borrowed for the callback that produced them, so both are
-   * copied now and neither pointer is kept (R11, KTD17). */
-  NSString *text = utf8 != NULL ? @(utf8) : nil;
-  cell.textField.stringValue = text != nil ? text : @"";
+  /* `symbol` is borrowed for the callback that produced it, so it is copied
+   * now and the pointer is never kept; `label` is the shim's own copy of the
+   * string it was told (R11, KTD17). */
+  cell.textField.stringValue = label != nil ? label : @"";
   if (symbol != NULL) {
     /* The row's own text is what a screen reader reads for the icon, which is
      * what the Swift sidebar passes too (R23). An unknown symbol name is nil
      * here, not an error. */
     cell.imageView.image = [NSImage imageWithSystemSymbolName:@(symbol)
-                                     accessibilityDescription:text];
+                                     accessibilityDescription:label];
   }
   return cell;
 }
